@@ -64,7 +64,7 @@ export const HomePage = ({ setActivePage, onOpenAuth }) => {
       role: 'Staff Solutions Architect',
       company: 'Amazon Web Services',
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ananya&mouth=smile&eyes=default&clothing=collarAndSweater&backgroundColor=c0aede',
-      college: 'Stanford University',
+      college: 'Institute of Engineering and Management',
       matchScore: 89,
       skills: ['Kubernetes', 'Terraform', 'AWS Lambda', 'Microservices'],
       reason: 'Strong track record in enterprise cloud migration, infrastructure as code, and mentoring junior engineers through AWS certifications.'

@@ -169,7 +169,7 @@ const RecruiterDashboardPage = () => {
                     <div>
                       <h4 className="text-sm font-bold text-white">{c.name}</h4>
                       <p className="text-xs text-slate-400">{c.major || 'Computer Science'}</p>
-                      <p className="text-[11px] text-slate-500">🏛️ {c.college_name || 'Stanford University'}</p>
+                      <p className="text-[11px] text-slate-500">🏛️ {c.college_name || 'Institute of Engineering and Management'}</p>
                     </div>
                   </div>
 

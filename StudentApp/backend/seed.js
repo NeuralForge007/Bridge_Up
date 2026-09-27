@@ -35,34 +35,78 @@ export async function runSeeder() {
     return XLSX.utils.sheet_to_json(sheet);
   };
 
-  // 1. Seed Colleges
-  const rawColleges = getSheetData('Colleges');
-  console.log(`\n🏫 Seeding ${rawColleges.length} Colleges...`);
-  const collegesList = rawColleges.map(c => ({
-    college_id: Number(c.college_id),
-    college_name: c.college_name,
-    city: c.city || '',
-    state: c.state || '',
-    country: c.country || 'India',
-    short_code: c.short_code || '',
-    website_domain: c.website_domain || '',
-    admin_demo_email: c.admin_demo_email || '',
-    status: 'Verified'
-  }));
+  // 1. Seed Canonical Kolkata Colleges
+  const CANONICAL_COLLEGES = [
+    {
+      college_id: 1,
+      college_name: 'Institute of Engineering and Management',
+      city: 'Kolkata',
+      state: 'West Bengal',
+      country: 'India',
+      short_code: 'IEM',
+      website_domain: 'iem.edu.in',
+      admin_demo_email: 'admin@iem.edu.in',
+      status: 'Verified'
+    },
+    {
+      college_id: 2,
+      college_name: 'Jadavpur University',
+      city: 'Kolkata',
+      state: 'West Bengal',
+      country: 'India',
+      short_code: 'JU',
+      website_domain: 'jadavpuruniversity.in',
+      admin_demo_email: 'admin@jadavpuruniversity.in',
+      status: 'Verified'
+    },
+    {
+      college_id: 3,
+      college_name: 'University of Calcutta',
+      city: 'Kolkata',
+      state: 'West Bengal',
+      country: 'India',
+      short_code: 'CU',
+      website_domain: 'caluniv.ac.in',
+      admin_demo_email: 'admin@caluniv.ac.in',
+      status: 'Verified'
+    },
+    {
+      college_id: 4,
+      college_name: 'IIT Kharagpur',
+      city: 'Kharagpur',
+      state: 'West Bengal',
+      country: 'India',
+      short_code: 'IIT KGP',
+      website_domain: 'iitkgp.ac.in',
+      admin_demo_email: 'admin@iitkgp.ac.in',
+      status: 'Verified'
+    },
+    {
+      college_id: 5,
+      college_name: 'NIT Durgapur',
+      city: 'Durgapur',
+      state: 'West Bengal',
+      country: 'India',
+      short_code: 'NIT DGP',
+      website_domain: 'nitdgp.ac.in',
+      admin_demo_email: 'admin@nitdgp.ac.in',
+      status: 'Verified'
+    }
+  ];
 
+  console.log(`\n🏫 Seeding ${CANONICAL_COLLEGES.length} Canonical Colleges...`);
   try {
-    const { error } = await supabase.from('colleges').upsert(collegesList, { onConflict: 'college_id' });
+    const { error } = await supabase.from('colleges').upsert(CANONICAL_COLLEGES, { onConflict: 'college_id' });
     if (error) console.warn('Supabase Colleges notice:', error.message);
-    else console.log('✅ Colleges seeded to Supabase.');
+    else console.log('✅ Canonical Colleges seeded to Supabase.');
   } catch (e) {
     console.warn('Colleges fallback:', e.message);
   }
-  collegesList.forEach(c => dbStore.upsertCollege(c));
+  CANONICAL_COLLEGES.forEach(c => dbStore.upsertCollege(c));
 
   // 2. Seed Demo Users & Passwords (bcrypt hashed)
   const rawUsers = getSheetData('Users_Auth_Demo');
   console.log(`\n👥 Seeding ${rawUsers.length} Demo & Core Users...`);
-  const defaultHash = bcrypt.hashSync('password123', 8);
 
   const usersList = [];
   for (const u of rawUsers) {
@@ -91,25 +135,37 @@ export async function runSeeder() {
   // 3. Seed Students
   const rawStudents = getSheetData('Students');
   console.log(`\n🎓 Seeding ${rawStudents.length} Students...`);
-  const studentsList = rawStudents.map(s => ({
-    student_id: Number(s.student_id),
-    user_id: `STUDENT-${s.student_id}`,
-    full_name: s.full_name,
-    email: String(s.email).toLowerCase().trim(),
-    role: 'STUDENT',
-    college_id: Number(s.college_id),
-    year_of_study: Number(s.year_of_study) || 2,
-    degree: s.degree || 'B.Tech',
-    department: s.department || 'Computer Science & Engineering',
-    graduation_year: Number(s.graduation_year) || 2027,
-    cgpa: Number(s.cgpa) || 8.5,
-    career_domain: s.career_domain || 'Software Development',
-    career_goal: s.career_goal || 'Become a full-stack engineer',
-    primary_skill: s.primary_skill || 'Python',
-    engagement_status: s.engagement_status || 'Active',
-    verification_status: s.verification_status || 'Pending',
-    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(s.full_name)}&mouth=smile&eyes=default&clothing=collarAndSweater&backgroundColor=b6e3f4`
-  }));
+  const collegeNamesMap = {
+    1: 'Institute of Engineering and Management',
+    2: 'Jadavpur University',
+    3: 'University of Calcutta',
+    4: 'IIT Kharagpur',
+    5: 'NIT Durgapur'
+  };
+
+  const studentsList = rawStudents.map(s => {
+    const cid = (Number(s.college_id) >= 1 && Number(s.college_id) <= 5) ? Number(s.college_id) : 1;
+    return {
+      student_id: Number(s.student_id),
+      user_id: `STUDENT-${s.student_id}`,
+      full_name: s.full_name,
+      email: String(s.email).toLowerCase().trim(),
+      role: 'STUDENT',
+      college_id: cid,
+      college_name: collegeNamesMap[cid] || 'Institute of Engineering and Management',
+      year_of_study: Number(s.year_of_study) || 2,
+      degree: s.degree || 'B.Tech',
+      department: s.department || 'Computer Science & Engineering',
+      graduation_year: Number(s.graduation_year) || 2027,
+      cgpa: Number(s.cgpa) || 8.5,
+      career_domain: s.career_domain || 'Software Development',
+      career_goal: s.career_goal || 'Become a full-stack engineer',
+      primary_skill: s.primary_skill || 'Python',
+      engagement_status: s.engagement_status || 'Active',
+      verification_status: s.verification_status || 'Pending',
+      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(s.full_name)}&mouth=smile&eyes=default&clothing=collarAndSweater&backgroundColor=b6e3f4`
+    };
+  });
 
   try {
     const { error } = await supabase.from('students').upsert(studentsList, { onConflict: 'student_id' });
@@ -120,33 +176,128 @@ export async function runSeeder() {
   }
   studentsList.forEach(s => dbStore.upsertStudent(s));
 
-  // 4. Seed Alumni Mentors
-  const rawAlumni = getSheetData('Alumni');
-  console.log(`\n💼 Seeding ${rawAlumni.length} Alumni Mentors...`);
-  const alumniList = rawAlumni.map(a => ({
-    alumni_id: Number(a.alumni_id),
-    user_id: `ALUMNI-${a.alumni_id}`,
-    full_name: a.full_name,
-    email: String(a.email).toLowerCase().trim(),
-    role: 'ALUMNI',
-    college_id: Number(a.college_id),
-    graduation_year: Number(a.graduation_year) || 2020,
-    current_role: a.current_role || 'Software Engineer',
-    company: a.company || 'Tech Innovations',
-    experience_years: Number(a.experience_years) || 3,
-    career_domain: a.career_domain || 'Engineering',
-    availability: a.availability || 'Available',
-    verification_status: a.verification_status || 'Verified',
-    mentor_status: a.mentor_status || 'Mentor',
-    referral_status: a.referral_status || 'Open for Referrals',
-    mentor_rating: Number(a.mentor_rating) || 4.8,
-    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(a.full_name)}&mouth=smile&eyes=default&clothing=blazerAndShirt&backgroundColor=c0aede`
-  }));
+  // 4. Seed Alumni Mentors (from NEW MASTER CSV: bridgeup_kolkata_alumni_dataset.csv)
+  const CSV_ALUMNI_PATH = path.resolve(__dirname, 'bridgeup_kolkata_alumni_dataset.csv');
+  let alumniList = [];
+  let parsedAlumniSkills = [];
+
+  if (fs.existsSync(CSV_ALUMNI_PATH)) {
+    console.log(`\n💼 Ingesting 300 Alumni from Master CSV: ${path.basename(CSV_ALUMNI_PATH)}...`);
+    const csvContent = fs.readFileSync(CSV_ALUMNI_PATH, 'utf8');
+    const lines = csvContent.split(/\r?\n/).filter(line => line.trim().length > 0);
+    
+    // Custom CSV parser handling quoted bio and career path
+    function parseCSVLine(line) {
+      const result = [];
+      let cur = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"' || char === "'") {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(cur.trim());
+          cur = '';
+        } else {
+          cur += char;
+        }
+      }
+      result.push(cur.trim());
+      return result;
+    }
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseCSVLine(lines[i]);
+      if (cols.length < 8) continue;
+
+      // alumni_id,name,college_id,college_name,current_role,company,career_domain,skills,experience_years,graduation_year,availability,verified,mentor_rating,bio,career_path
+      const alumni_id = Number(cols[0]);
+      const name = cols[1];
+      const college_id = Number(cols[2]) || 1;
+      const college_name = cols[3] || collegeNamesMap[college_id] || 'Institute of Engineering and Management';
+      const current_role = cols[4] || 'Software Engineer';
+      const company = cols[5] || 'Tech Organization';
+      const career_domain = cols[6] || 'Software Engineering';
+      const rawSkills = cols[7] || '';
+      const experience_years = Number(cols[8]) || 0;
+      const graduation_year = Number(cols[9]) || 2020;
+      const availability = cols[10] || 'Available';
+      const verified = (cols[11] || '').toLowerCase() === 'yes' ? 'Verified' : 'Verified';
+      const mentor_rating = Number(cols[12]) || 4.8;
+      const bio = cols[13] ? cols[13].replace(/^"|"$/g, '').trim() : '';
+      const career_path = cols[14] ? cols[14].replace(/^"|"$/g, '').trim() : `${college_name} → ${current_role} @ ${company}`;
+
+      const skillsArray = rawSkills.split(';').map(s => s.trim()).filter(Boolean);
+
+      skillsArray.forEach(sk => {
+        parsedAlumniSkills.push({
+          alumni_id,
+          skill: sk.toLowerCase(),
+          proficiency: 'Advanced'
+        });
+      });
+
+      const cleanComp = company.toLowerCase().replace(/[^a-z0-9]/g, '') || 'alumni';
+      const cleanName = name.toLowerCase().replace(/[^a-z0-9]/g, '.');
+      const email = `${cleanName}.${alumni_id}@${cleanComp}.com`;
+
+      alumniList.push({
+        id: `alm-${alumni_id}`,
+        alumni_id,
+        user_id: `ALUMNI-${alumni_id}`,
+        full_name: name,
+        name,
+        email,
+        role: 'ALUMNI',
+        college_id,
+        college_name,
+        graduation_year,
+        current_role,
+        role_title: current_role,
+        company,
+        experience_years,
+        career_domain,
+        availability,
+        verification_status: verified,
+        mentor_status: 'Mentor',
+        referral_status: 'Open for Referrals',
+        mentor_rating,
+        bio,
+        career_path,
+        skills: skillsArray,
+        topics: ['Career Guidance', 'Technical Mentorship', 'Interview Preparation'],
+        sessions_count: Math.floor(Math.random() * 25) + 5,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${alumni_id}&mouth=smile&eyes=default&clothing=blazerAndShirt&backgroundColor=c0aede`
+      });
+    }
+  } else {
+    console.warn('⚠️ Master alumni CSV not found, fallback to default.');
+  }
+
+  console.log(`✅ Loaded ${alumniList.length} Alumni from Master Kolkata CSV dataset.`);
+
+  // Clean old alumni (e.g. old demo IDs outside 1001-1300)
+  try {
+    await supabase.from('alumni').delete().lt('alumni_id', 1001);
+    await supabase.from('alumni').delete().gt('alumni_id', 1300);
+    await supabase.from('alumni_skills').delete().lt('alumni_id', 1001);
+    await supabase.from('alumni_skills').delete().gt('alumni_id', 1300);
+  } catch (delErr) {}
 
   try {
-    const { error } = await supabase.from('alumni').upsert(alumniList, { onConflict: 'alumni_id' });
-    if (error) console.warn('Supabase Alumni notice:', error.message);
-    else console.log('✅ Alumni seeded to Supabase.');
+    // Sanitize columns for base Supabase schema table and insert in batches
+    const supaAlumniPayload = alumniList.map(a => {
+      const copy = { ...a };
+      delete copy.career_path; // in case column has not been added via SQL editor yet
+      return copy;
+    });
+
+    for (let i = 0; i < supaAlumniPayload.length; i += 50) {
+      const batch = supaAlumniPayload.slice(i, i + 50);
+      const { error } = await supabase.from('alumni').upsert(batch, { onConflict: 'alumni_id' });
+      if (error) console.warn(`Supabase Alumni batch ${i} notice:`, error.message);
+    }
+    console.log(`✅ Successfully seeded ${alumniList.length} Alumni to Supabase.`);
   } catch (e) {
     console.warn('Alumni fallback:', e.message);
   }
@@ -177,8 +328,7 @@ export async function runSeeder() {
 
   // 6. Seed Student Skills & Alumni Skills
   const rawStudentSkills = getSheetData('Student_Skills');
-  const rawAlumniSkills = getSheetData('Alumni_Skills');
-  console.log(`\n⚡ Seeding ${rawStudentSkills.length} Student Skills & ${rawAlumniSkills.length} Alumni Skills...`);
+  console.log(`\n⚡ Seeding ${rawStudentSkills.length} Student Skills & ${parsedAlumniSkills.length} Alumni Skills...`);
   
   dbStore.studentSkills = rawStudentSkills.map(sk => ({
     student_id: Number(sk.student_id),
@@ -186,11 +336,14 @@ export async function runSeeder() {
     proficiency: sk.proficiency || 'Intermediate'
   }));
 
-  dbStore.alumniSkills = rawAlumniSkills.map(ak => ({
-    alumni_id: Number(ak.alumni_id),
-    skill: ak.skill,
-    proficiency: ak.proficiency || 'Advanced'
-  }));
+  dbStore.alumniSkills = parsedAlumniSkills;
+
+  try {
+    // Upsert parsed alumni skills to Supabase
+    if (parsedAlumniSkills.length > 0) {
+      await supabase.from('alumni_skills').upsert(parsedAlumniSkills.slice(0, 1000));
+    }
+  } catch (e) {}
 
   // 7. Seed Jobs & Internships
   const rawJobs = getSheetData('Jobs_Internships');
@@ -222,17 +375,21 @@ export async function runSeeder() {
   // 8. Seed Mentorships
   const rawMentorships = getSheetData('Mentorships');
   console.log(`\n🤝 Seeding ${rawMentorships.length} Mentorship Records...`);
-  const mentorshipsList = rawMentorships.map(m => ({
-    mentorship_id: Number(m.mentorship_id),
-    student_id: Number(m.student_id),
-    alumni_id: Number(m.alumni_id),
-    goal: m.goal || 'Career Guidance & Skill Building',
-    status: String(m.status || 'REQUESTED').toUpperCase(),
-    start_date: m.start_date || '2026-08-01',
-    end_date: m.end_date || '2026-10-31',
-    source: m.source || 'AI match',
-    ai_match_score: Number(m.ai_match_score) ? (Number(m.ai_match_score) <= 1 ? Math.round(Number(m.ai_match_score) * 100) : Number(m.ai_match_score)) : 88.0
-  }));
+  const mentorshipsList = rawMentorships.map(m => {
+    const rawAlmId = Number(m.alumni_id) || 1;
+    const mappedAlmId = rawAlmId >= 1001 && rawAlmId <= 1300 ? rawAlmId : ((rawAlmId % 300) + 1001);
+    return {
+      mentorship_id: Number(m.mentorship_id),
+      student_id: Number(m.student_id),
+      alumni_id: mappedAlmId,
+      goal: m.goal || 'Career Guidance & Skill Building',
+      status: String(m.status || 'REQUESTED').toUpperCase(),
+      start_date: m.start_date || '2026-08-01',
+      end_date: m.end_date || '2026-10-31',
+      source: m.source || 'AI match',
+      ai_match_score: Number(m.ai_match_score) ? (Number(m.ai_match_score) <= 1 ? Math.round(Number(m.ai_match_score) * 100) : Number(m.ai_match_score)) : 88.0
+    };
+  });
 
   try {
     const { error } = await supabase.from('mentorships').upsert(mentorshipsList, { onConflict: 'mentorship_id' });
@@ -292,14 +449,18 @@ export async function runSeeder() {
   // 10. Seed Referrals
   const rawReferrals = getSheetData('Referrals');
   console.log(`\n🎯 Seeding ${rawReferrals.length} Referrals...`);
-  const referralsList = rawReferrals.map(r => ({
-    referral_id: Number(r.referral_id),
-    alumni_id: Number(r.alumni_id),
-    student_id: Number(r.student_id),
-    job_id: Number(r.job_id),
-    status: r.status || 'SUBMITTED',
-    recommendation_reason: r.recommendation_reason || 'Strong academic and technical track record'
-  }));
+  const referralsList = rawReferrals.map(r => {
+    const rawAlmId = Number(r.alumni_id) || 1;
+    const mappedAlmId = rawAlmId >= 1001 && rawAlmId <= 1300 ? rawAlmId : ((rawAlmId % 300) + 1001);
+    return {
+      referral_id: Number(r.referral_id),
+      alumni_id: mappedAlmId,
+      student_id: Number(r.student_id),
+      job_id: Number(r.job_id),
+      status: r.status || 'SUBMITTED',
+      recommendation_reason: r.recommendation_reason || 'Strong academic and technical track record'
+    };
+  });
 
   try {
     await supabase.from('referrals').upsert(referralsList, { onConflict: 'referral_id' });

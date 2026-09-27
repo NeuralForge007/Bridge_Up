@@ -24,7 +24,7 @@ const AuthModal = ({ isOpen, onClose, defaultTab = 'login', initialRole = 'STUDE
   const [lastName, setLastName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
-  const [collegeName, setCollegeName] = useState('Stanford University');
+  const [collegeName, setCollegeName] = useState('Institute of Engineering and Management');
   const [major, setMajor] = useState('Computer Science');
   const [year, setYear] = useState('Junior (Year 3)');
   const [gpa, setGpa] = useState('8.85');
@@ -330,7 +330,7 @@ const AuthModal = ({ isOpen, onClose, defaultTab = 'login', initialRole = 'STUDE
                   required
                   value={signupEmail}
                   onChange={(e) => setSignupEmail(e.target.value)}
-                  placeholder="alex@stanford.edu"
+                  placeholder="alex@iem.edu.in"
                   className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
                 />
               </div>
@@ -357,7 +357,7 @@ const AuthModal = ({ isOpen, onClose, defaultTab = 'login', initialRole = 'STUDE
                       type="text"
                       value={collegeName}
                       onChange={(e) => setCollegeName(e.target.value)}
-                      placeholder="Stanford University"
+                      placeholder="Institute of Engineering and Management"
                       className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
                     />
                   </div>

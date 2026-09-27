@@ -216,7 +216,7 @@ const HackathonsPage = () => {
                     />
                     <div>
                       <h4 className="text-sm font-bold text-white">{pr.student_name || 'Student'}</h4>
-                      <p className="text-xs text-slate-400">{pr.student_college || 'Stanford University'}</p>
+                      <p className="text-xs text-slate-400">{pr.student_college || 'Institute of Engineering and Management'}</p>
                     </div>
                   </div>
 

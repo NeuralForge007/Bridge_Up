@@ -105,7 +105,7 @@ router.post('/', async (req, res) => {
 router.post('/:id/register', async (req, res) => {
   try {
     const { id } = req.params;
-    const { userId = '1001', userName = 'Alex Rivera', userEmail = 'alex.rivera@stanford.edu' } = req.body;
+    const { userId = '1001', userName = 'Alex Rivera', userEmail = 'alex.rivera@iem.edu.in' } = req.body;
 
     const registration = {
       id: `ereg-${Date.now()}`,

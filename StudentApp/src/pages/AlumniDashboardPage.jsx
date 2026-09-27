@@ -19,7 +19,7 @@ const AlumniDashboardPage = ({ setActivePage }) => {
   // Submit Referral Modal State
   const [referralModalOpen, setReferralModalOpen] = useState(false);
   const [studentName, setStudentName] = useState('Alex Rivera');
-  const [studentEmail, setStudentEmail] = useState('alex.rivera@stanford.edu');
+  const [studentEmail, setStudentEmail] = useState('alex.rivera@iem.edu.in');
   const [targetRole, setTargetRole] = useState('Software Engineer - University Grad 2026');
   const [referralNote, setReferralNote] = useState('Top performer in distributed systems, high GPA (9.2), excellent GitHub projects.');
   const [referralSuccess, setReferralSuccess] = useState('');
@@ -158,7 +158,7 @@ const AlumniDashboardPage = ({ setActivePage }) => {
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              {currentUser?.role_title || currentUser?.current_role || 'Staff Engineer'} @ <span className="text-blue-400 font-semibold">{currentUser?.company || 'Tech Leader'}</span> • {currentUser?.college_name || 'Stanford University'}
+              {currentUser?.role_title || currentUser?.current_role || 'Staff Engineer'} @ <span className="text-blue-400 font-semibold">{currentUser?.company || 'Tech Leader'}</span> • {currentUser?.college_name || 'Institute of Engineering and Management'}
             </p>
           </div>
         </div>
@@ -254,7 +254,7 @@ const AlumniDashboardPage = ({ setActivePage }) => {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-bold text-white text-base">{r.student_name || 'Alex Rivera'}</span>
-                      <span className="text-xs text-slate-400">• {r.student_major || 'Computer Science'} ({r.student_college || 'Stanford University'})</span>
+                      <span className="text-xs text-slate-400">• {r.student_major || 'Computer Science'} ({r.student_college || 'Institute of Engineering and Management'})</span>
                       {r.student_gpa && (
                         <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400 border border-slate-700">
                           GPA: {r.student_gpa}
@@ -333,7 +333,7 @@ const AlumniDashboardPage = ({ setActivePage }) => {
                       <div>
                         <h4 className="font-bold text-white text-sm">{mentee.student_name || 'Alex Rivera'}</h4>
                         <p className="text-xs text-slate-400">{mentee.student_major || 'Computer Science'}</p>
-                        <p className="text-[11px] text-slate-500">{mentee.student_college || 'Stanford University'}</p>
+                        <p className="text-[11px] text-slate-500">{mentee.student_college || 'Institute of Engineering and Management'}</p>
                       </div>
                     </div>
                     <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/20">

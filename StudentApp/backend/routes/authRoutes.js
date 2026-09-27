@@ -68,7 +68,7 @@ router.post('/register', async (req, res) => {
     const finalAvatar = avatar || avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(fullName)}&mouth=smile&eyes=default&clothing=collarAndSweater&backgroundColor=b6e3f4`;
     const finalSkills = Array.isArray(skills) ? skills : (skills ? String(skills).split(',').map(s => s.trim()).filter(Boolean) : ['Problem Solving', 'React', 'Python']);
     const finalGpa = gpa ? String(gpa) : '8.80';
-    const finalCollege = collegeName || 'Stanford University';
+    const finalCollege = collegeName || 'Institute of Engineering and Management';
     const finalCompany = company || companyName || '';
     const finalRoleTitle = roleTitle || jobTitle || (userRole === 'STUDENT' ? 'Student' : 'Software Engineer');
 

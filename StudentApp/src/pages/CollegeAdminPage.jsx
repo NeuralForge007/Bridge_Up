@@ -81,7 +81,7 @@ const CollegeAdminPage = () => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-black text-white">{currentUser?.college_name || 'Stanford University'}</h1>
+              <h1 className="text-2xl font-black text-white">{currentUser?.college_name || 'Institute of Engineering and Management'}</h1>
               <span className="rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-bold text-amber-400 border border-amber-500/20">
                 Administration Portal
               </span>

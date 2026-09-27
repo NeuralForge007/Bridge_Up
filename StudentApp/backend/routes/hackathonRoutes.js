@@ -144,7 +144,7 @@ router.get('/:id/partners', async (req, res) => {
         ...pr,
         id: pr.request_id || pr.id,
         student_name: student?.full_name || student?.name || 'Student Pioneer',
-        student_college: 'Stanford University',
+        student_college: student?.college_name || 'Institute of Engineering and Management',
         desired_role: pr.required_skill_1 ? `${pr.required_skill_1} Specialist` : 'Frontend Developer',
         desired_skills: [pr.required_skill_1, pr.required_skill_2].filter(Boolean),
         pitch: pr.pitch || `Looking for talented collaborator skilled in ${pr.required_skill_1 || 'React'} for this hackathon challenge!`,

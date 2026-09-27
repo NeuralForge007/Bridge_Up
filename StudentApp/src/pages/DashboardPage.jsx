@@ -36,7 +36,7 @@ export const DashboardPage = ({ setActivePage, onOpenTimer }) => {
                 </h1>
               </div>
               <p className="text-xs sm:text-sm text-slate-300 mt-1">
-                {currentUser.major || 'Computer Science'} • {currentUser.year || 'Junior (Year 3)'} | {currentUser.college_name || 'Stanford University'}
+                {currentUser.major || 'Computer Science'} • {currentUser.year || 'Junior (Year 3)'} | {currentUser.college_name || 'Institute of Engineering and Management'}
               </p>
               <div className="mt-2 flex items-center gap-2">
                 <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/20">

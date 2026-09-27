@@ -26,7 +26,12 @@ export const AlumniMentorsPage = ({ setActivePage }) => {
   const [chatInputText, setChatInputText] = useState('');
   const [chatMessages, setChatMessages] = useState([]);
 
-  const companies = ['All', 'Google', 'Meta', 'Tesla', 'Microsoft', 'Amazon', 'Apple', 'Stripe'];
+  const companies = [
+    'All', 'Google', 'Amazon', 'Microsoft', 'Meta', 'NVIDIA', 'DRDO', 'ISRO',
+    'TCS', 'Infosys', 'Deloitte', 'Goldman Sachs', 'JPMorgan Chase', 'IBM',
+    'Adobe', 'Flipkart', 'Walmart Global Tech', 'Samsung R&D', 'Bosch',
+    'Atlassian', 'Polygon Labs', 'CoinDCX', 'Accenture'
+  ];
 
   const loadData = async () => {
     setLoading(true);
@@ -73,7 +78,7 @@ export const AlumniMentorsPage = ({ setActivePage }) => {
         studentEmail: currentUser?.email || 'student@university.edu',
         studentAvatar: currentUser?.avatar,
         studentMajor: currentUser?.major || 'Computer Science',
-        studentCollege: currentUser?.college_name || 'Stanford University',
+        studentCollege: currentUser?.college_name || 'Institute of Engineering and Management',
         studentGpa: currentUser?.gpa || '3.85',
         studentSkills: currentUser?.skills || ['React', 'Python'],
         alumniId: selectedMentor.id || selectedMentor.alumni_id || selectedMentor.user_id,

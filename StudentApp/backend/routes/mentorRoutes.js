@@ -62,15 +62,20 @@ async function resolveUserIdentifiers(userId) {
   return Array.from(ids);
 }
 
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8001';
+
 // AI Matcher Handler
 const handleAIMatch = async (req, res) => {
   try {
     const {
       studentId,
+      student_id,
       goal,
       careerGoal,
+      career_goal,
       domain,
       careerDomain,
+      career_domain,
       path,
       skills,
       company,
@@ -81,22 +86,91 @@ const handleAIMatch = async (req, res) => {
       limit = 8
     } = req.body;
 
-    const targetGoal = goal || careerGoal || 'Land a Software Engineer role and master Distributed Systems';
-    const targetDomain = domain || careerDomain || 'Software Engineering';
+    const targetGoal = goal || careerGoal || career_goal || 'Land a Software Engineer role and master Distributed Systems';
+    const targetDomain = domain || careerDomain || career_domain || 'Software Engineering';
+    const targetSkills = skills ? (Array.isArray(skills) ? skills : skills.split(',').map(s => s.trim()).filter(Boolean)) : ['Python', 'SQL', 'React', 'Machine Learning'];
+    let targetCollegeId = Number(collegeId || college_id || 0);
+    const targetStudentId = student_id || studentId || req.user?.id;
 
-    let student = null;
-    if (studentId && dbStore.getStudentById) {
-      student = dbStore.getStudentById(studentId);
+    // Resolve authenticated student's real college if available
+    if (targetStudentId) {
+      const dbStudent = (dbStore.findStudentById ? dbStore.findStudentById(targetStudentId) : null) || 
+        dbStore.students?.find(s => String(s.student_id) === String(targetStudentId) || String(s.user_id) === String(targetStudentId) || String(s.id) === String(targetStudentId) || s.email?.toLowerCase() === String(targetStudentId).toLowerCase());
+      if (dbStudent && dbStudent.college_id) {
+        targetCollegeId = Number(dbStudent.college_id);
+      }
+    }
+    if (!targetCollegeId || targetCollegeId < 1 || targetCollegeId > 5) {
+      targetCollegeId = 1;
     }
 
+    // 1. Try FastAPI AI Microservice (Sentence-BERT + pgvector + Hybrid Reranker)
+    try {
+      const aiResponse = await fetch(`${AI_SERVICE_URL}/recommend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          career_goal: targetGoal,
+          career_domain: targetDomain,
+          skills: targetSkills,
+          college_id: targetCollegeId,
+          student_id: String(targetStudentId || '101'),
+          limit: limit || 8
+        }),
+        signal: AbortSignal.timeout(4500)
+      });
+
+      if (aiResponse.ok) {
+        const aiData = await aiResponse.json();
+        const formattedMatches = (aiData.matches || []).map(m => ({
+          ...m,
+          id: m.id || `alm-${m.alumni_id}`,
+          name: m.name || m.full_name,
+          avatar: m.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${m.alumni_id}&mouth=smile&eyes=default&clothing=blazerAndShirt&backgroundColor=c0aede`,
+          role_title: m.current_role || m.role_title || 'Software Engineer',
+          company: m.company || 'Tech Leader',
+          college_name: m.college_name || 'Institute of Engineering and Management',
+          matchScore: m.match_score || m.matchScore || 88,
+          match_score: m.match_score || m.matchScore || 88,
+          matchType: m.match_type || 'STRONG',
+          match_type: m.match_type || 'STRONG',
+          matchRationale: m.matchRationale || m.reasons?.[1] || `${m.name} matches your target career trajectory in ${m.career_domain}.`,
+          reasons: m.reasons || [
+            '✓ Verified Alumni from your College network',
+            `✓ Works in ${m.career_domain}`,
+            `✓ Role: ${m.current_role}`
+          ],
+          scoreBreakdown: m.score_breakdown || m.scoreBreakdown
+        }));
+
+        return res.json({
+          success: true,
+          count: formattedMatches.length,
+          isSBERT: true,
+          exact_match_found: aiData.exact_match_found,
+          student_college: aiData.student_college || { id: targetCollegeId, name: 'Institute of Engineering and Management' },
+          query: aiData.query || { target_role: targetGoal, target_domain: targetDomain, skills: targetSkills },
+          matches: formattedMatches,
+          mentors: formattedMatches
+        });
+      }
+    } catch (aiErr) {
+      console.warn(`FastAPI AI service notice (${aiErr.message}), using fallback matcher...`);
+    }
+
+    // 2. Fallback Matcher (if FastAPI is initializing)
+    let student = null;
+    if (targetStudentId && dbStore.getStudentById) {
+      student = dbStore.getStudentById(targetStudentId);
+    }
     if (!student) {
       student = {
-        student_id: 9999,
+        student_id: Number(targetStudentId) || 1001,
         career_goal: targetGoal,
         career_domain: targetDomain,
-        skills: skills ? (Array.isArray(skills) ? skills : skills.split(',').map(s => s.trim())) : ['Python', 'SQL', 'React', 'Machine Learning'],
-        primary_skill: 'Python',
-        college_id: collegeId || college_id ? Number(collegeId || college_id) : 1
+        skills: targetSkills,
+        primary_skill: targetSkills[0] || 'Python',
+        college_id: targetCollegeId
       };
     }
 
@@ -105,39 +179,54 @@ const handleAIMatch = async (req, res) => {
       careerGoal: targetGoal,
       careerDomain: targetDomain,
       path,
-      skills,
+      skills: targetSkills,
       company,
-      college_id: collegeId || college_id,
+      college_id: targetCollegeId,
       experienceYears,
       onlyVerified,
       limit
     });
 
-    const enrichedMatches = ranked.map(m => ({
-      ...m,
-      name: m.name || m.full_name,
-      avatar: m.avatar || m.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mentor',
-      role_title: m.role_title || m.current_role || 'Staff Engineer',
-      company: m.company || 'Tech Leader',
-      college_name: m.college_name || 'Stanford University',
-      skills: m.skills || ['Distributed Systems', 'Go', 'System Design', 'GCP'],
-      matchScore: m.matchScore || Math.round((m.finalScore || 0.85) * 100),
-      matchRationale: m.matchRationale || `${m.name || m.full_name} has high expertise in ${m.career_domain || 'Engineering'} and matches your target goals.`,
-      scoreBreakdown: m.scoreBreakdown || {
-        skillsScore: 32,
-        goalScore: 23,
-        domainScore: 14,
-        pathScore: 9,
-        collegeScore: 10,
-        availabilityScore: 5
-      }
-    }));
+    const enrichedMatches = ranked.map(m => {
+      const score = m.aiMatchScore || m.matchScore || 85;
+      const matchType = score >= 85 ? 'EXACT' : (score >= 72 ? 'STRONG' : 'RELATED');
+      return {
+        ...m,
+        id: m.id || `alm-${m.alumni_id}`,
+        name: m.name || m.full_name,
+        avatar: m.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${m.alumni_id || 'Mentor'}&mouth=smile&eyes=default&clothing=blazerAndShirt&backgroundColor=c0aede`,
+        role_title: m.role_title || m.current_role || 'Staff Engineer',
+        company: m.company || 'Tech Organization',
+        college_name: m.college_name || 'Institute of Engineering and Management',
+        skills: m.skills || ['Python', 'System Design', 'Algorithms'],
+        matchScore: score,
+        match_score: score,
+        matchType,
+        match_type: matchType,
+        matchRationale: m.aiExplanation || `${m.name} has relevant expertise in ${m.career_domain || 'Technology'}.`,
+        reasons: [
+          '✓ Verified Alumni from your College network',
+          `✓ Industry professional at ${m.company}`,
+          `✓ Role: ${m.current_role || m.role_title}`,
+          `✓ ${m.experience_years || 2}+ years domain experience`
+        ],
+        scoreBreakdown: m.scoreBreakdown || {
+          skillsScore: 32,
+          goalScore: 23,
+          domainScore: 14,
+          pathScore: 9,
+          collegeScore: 10,
+          availabilityScore: 5
+        }
+      };
+    });
 
     return res.json({
       success: true,
       count: enrichedMatches.length,
       isLocalAI: true,
-      query: { goal: targetGoal, domain: targetDomain, skills },
+      exact_match_found: enrichedMatches.some(m => m.matchType === 'EXACT'),
+      query: { goal: targetGoal, domain: targetDomain, skills: targetSkills },
       matches: enrichedMatches,
       mentors: enrichedMatches
     });
@@ -237,7 +326,7 @@ router.post('/request', async (req, res) => {
     const finalStudentName = studentName || studentObj?.name || studentObj?.display_name || studentObj?.full_name || 'Student Mentee';
     const finalStudentEmail = studentEmail || studentObj?.email || 'student@university.edu';
     const finalStudentAvatar = studentAvatar || studentObj?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(finalStudentEmail)}`;
-    const finalStudentCollege = studentCollege || studentObj?.college_name || 'Stanford University';
+    const finalStudentCollege = studentCollege || studentObj?.college_name || 'Institute of Engineering and Management';
     const finalStudentMajor = studentMajor || studentObj?.major || studentObj?.department || 'Computer Science';
     const finalStudentGpa = studentGpa || studentObj?.gpa || studentObj?.cgpa || '3.85';
     const finalStudentSkills = studentSkills || studentObj?.skills || ['React', 'Python', 'Machine Learning'];
@@ -386,9 +475,9 @@ router.get('/requests/:userId', async (req, res) => {
         mentorship_id: r.mentorship_id || r.id,
         student_id: r.student_id,
         student_name: r.student_name || student?.name || student?.full_name || 'Alex Rivera',
-        student_email: r.student_email || student?.email || 'alex.rivera@stanford.edu',
+        student_email: r.student_email || student?.email || 'alex.rivera@iem.edu.in',
         student_avatar: r.student_avatar || student?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(r.student_name || 'student')}`,
-        student_college: r.student_college || student?.college_name || 'Stanford University',
+        student_college: r.student_college || student?.college_name || 'Institute of Engineering and Management',
         student_major: r.student_major || student?.major || student?.department || 'Computer Science',
         student_gpa: r.student_gpa || student?.gpa || student?.cgpa || '3.85',
         student_skills: r.student_skills || student?.skills || ['React', 'Python', 'Algorithms'],
