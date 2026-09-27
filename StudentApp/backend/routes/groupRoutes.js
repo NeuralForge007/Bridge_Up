@@ -10,27 +10,37 @@ router.get('/', async (req, res) => {
     const { userId } = req.query;
 
     let groups = [];
-    const { data: dbGroups, error } = await supabase
-      .from('study_groups')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      const { data: dbGroups, error } = await supabase
+        .from('study_groups')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (!error && dbGroups && dbGroups.length > 0) {
-      groups = dbGroups;
-    } else {
+      if (!error && dbGroups && dbGroups.length > 0) {
+        groups = dbGroups;
+      }
+    } catch (e) {
+      console.warn('Study groups Supabase note:', e.message);
+    }
+
+    if (groups.length === 0) {
       groups = SEED_STUDY_GROUPS;
     }
 
     // Check user joined status
     let joinedGroupIds = new Set();
     if (userId) {
-      const { data: memberships } = await supabase
-        .from('study_group_members')
-        .select('group_id')
-        .eq('user_id', userId);
+      try {
+        const { data: memberships } = await supabase
+          .from('study_group_members')
+          .select('group_id')
+          .eq('user_id', userId);
 
-      if (memberships) {
-        joinedGroupIds = new Set(memberships.map(m => m.group_id));
+        if (memberships) {
+          joinedGroupIds = new Set(memberships.map(m => m.group_id));
+        }
+      } catch (e) {
+        // safe fallback
       }
     }
 

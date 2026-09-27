@@ -10,12 +10,21 @@ router.get('/conversations/:userId', async (req, res) => {
     const { userId } = req.params;
 
     // Fetch conversations
-    const { data: convs, error: convErr } = await supabase
-      .from('conversations')
-      .select('*')
-      .order('updated_at', { ascending: false });
+    let convs = [];
+    try {
+      const { data, error: convErr } = await supabase
+        .from('conversations')
+        .select('*')
+        .order('updated_at', { ascending: false });
 
-    if (convErr || !convs || convs.length === 0) {
+      if (!convErr && data) {
+        convs = data;
+      }
+    } catch (e) {
+      console.warn('Conversations Supabase query note:', e.message);
+    }
+
+    if (!convs || convs.length === 0) {
       return res.json({ conversations: [] });
     }
 

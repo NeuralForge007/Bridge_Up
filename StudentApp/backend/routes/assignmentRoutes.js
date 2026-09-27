@@ -65,26 +65,32 @@ router.get('/:userId', async (req, res) => {
     const { userId } = req.params;
     let assignments = [];
 
-    const { data, error } = await supabase
-      .from('assignments')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('assignments')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
 
-    if (!error && data && data.length > 0) {
-      assignments = data.map(a => ({
-        id: a.id,
-        title: a.title,
-        course: a.course,
-        dueDate: a.due_date,
-        dueTime: a.due_time,
-        status: a.status,
-        priority: a.priority,
-        weight: a.weight,
-        score: a.score,
-        notes: a.notes
-      }));
-    } else {
+      if (!error && data && data.length > 0) {
+        assignments = data.map(a => ({
+          id: a.id,
+          title: a.title,
+          course: a.course,
+          dueDate: a.due_date,
+          dueTime: a.due_time,
+          status: a.status,
+          priority: a.priority,
+          weight: a.weight,
+          score: a.score,
+          notes: a.notes
+        }));
+      }
+    } catch (supaErr) {
+      console.warn('Assignments Supabase query note:', supaErr.message);
+    }
+
+    if (assignments.length === 0) {
       assignments = SEED_ASSIGNMENTS.map(a => ({
         id: a.id,
         title: a.title,

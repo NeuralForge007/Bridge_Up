@@ -114,6 +114,29 @@ class DBStore {
   getSkillsForStudent(studentId) {
     return this.studentSkills.filter(sk => Number(sk.student_id) === Number(studentId)).map(sk => sk.skill);
   }
+  getStudentPeers(excludeId, excludeEmail) {
+    let list = this.students.map(s => {
+      const skills = this.getSkillsForStudent(s.student_id);
+      return {
+        id: s.id || `std-${s.student_id}`,
+        name: s.full_name || s.name || 'Student Peer',
+        email: s.email,
+        major: s.major || s.branch || 'Computer Science',
+        skills: (skills && skills.length > 0) ? skills : (s.skills || ['JavaScript', 'React']),
+        collegeId: s.college_id,
+        cgpa: s.cgpa || 8.5,
+        graduationYear: s.graduation_year || 2026,
+        jobTitle: s.job_title || 'Student',
+        streakDays: s.streak_days || 3,
+        studyHoursWeek: s.study_hours_week || 14.5,
+        verificationStatus: s.verification_status || 'Verified',
+        avatar: s.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(s.email || 'student')}`
+      };
+    });
+    if (excludeId) list = list.filter(p => String(p.id) !== String(excludeId) && String(p.student_id) !== String(excludeId));
+    if (excludeEmail) list = list.filter(p => (p.email || '').toLowerCase() !== (excludeEmail || '').toLowerCase());
+    return list;
+  }
 
   // --- Alumni ---
   upsertAlumni(a) {
@@ -183,6 +206,9 @@ class DBStore {
     }
     if (filters.status) list = list.filter(j => j.status?.toLowerCase() === filters.status.toLowerCase());
     return list;
+  }
+  getJobById(id) {
+    return this.jobs.find(j => j.job_id === Number(id) || String(j.job_id) === String(id) || j.id === id);
   }
 
   // --- Mentorships ---

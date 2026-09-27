@@ -9,17 +9,22 @@ router.get('/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const { data, error } = await supabase
-      .from('connections')
-      .select('*')
-      .or(`user_id.eq.${userId},peer_id.eq.${userId}`)
-      .eq('status', 'connected');
+    let connections = [];
+    try {
+      const { data, error } = await supabase
+        .from('connections')
+        .select('*')
+        .or(`user_id.eq.${userId},peer_id.eq.${userId}`)
+        .eq('status', 'connected');
 
-    if (error) {
-      return res.json({ connections: [] });
+      if (!error && data) {
+        connections = data;
+      }
+    } catch (e) {
+      console.warn('Connections Supabase query note:', e.message);
     }
 
-    return res.json({ connections: data || [] });
+    return res.json({ connections });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

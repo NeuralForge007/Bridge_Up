@@ -12,25 +12,27 @@ router.get('/', async (req, res) => {
     let peers = [];
 
     try {
-      let query = supabase.from('users').select('*').eq('role', 'student');
-      if (excludeId) query = query.neq('id', excludeId);
-      if (excludeEmail) query = query.neq('email', excludeEmail);
+      if (supabase && typeof supabase.from === 'function') {
+        let query = supabase.from('users').select('*').eq('role', 'student');
+        if (excludeId) query = query.neq('id', excludeId);
+        if (excludeEmail) query = query.neq('email', excludeEmail);
 
-      const { data, error } = await query;
-      if (!error && data && data.length > 0) {
-        peers = data.map(p => ({
-          ...p,
-          jobTitle: p.job_title || '',
-          streakDays: p.streak_days || 1,
-          studyHoursWeek: p.study_hours_week || 12.0
-        }));
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) {
+          peers = data.map(p => ({
+            ...p,
+            jobTitle: p.job_title || '',
+            streakDays: p.streak_days || 1,
+            studyHoursWeek: p.study_hours_week || 12.0
+          }));
+        }
       }
     } catch (e) {
       console.warn('Supabase peers query note:', e.message);
     }
 
-    if (peers.length === 0) {
-      peers = dbStore.getStudentPeers(excludeId, excludeEmail);
+    if (!peers || peers.length === 0) {
+      peers = dbStore.getStudentPeers ? dbStore.getStudentPeers(excludeId, excludeEmail) : [];
     }
 
     // Filter by major if specified
