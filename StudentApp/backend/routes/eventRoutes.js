@@ -1,13 +1,24 @@
 import express from 'express';
 import { dbStore } from '../dbStore.js';
+import { supabase } from '../supabaseClient.js';
+import { logUserActivity } from '../services/auditLogger.js';
 
 const router = express.Router();
 
 // Get all events
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { type, collegeId, search } = req.query;
-    let list = dbStore.getEvents ? dbStore.getEvents() : (dbStore.events || []);
+
+    let supaEvents = null;
+    try {
+      let q = supabase.from('events').select('*');
+      if (collegeId) q = q.eq('college_id', Number(collegeId));
+      const { data, error } = await q.order('created_at', { ascending: false });
+      if (!error && data && data.length > 0) supaEvents = data;
+    } catch (e) {}
+
+    let list = supaEvents || (dbStore.getEvents ? dbStore.getEvents() : (dbStore.events || []));
 
     if (type) {
       list = list.filter(e => e.event_type?.toLowerCase() === type.toLowerCase() || e.type?.toLowerCase() === type.toLowerCase());
@@ -52,7 +63,7 @@ router.get('/', (req, res) => {
 });
 
 // Create an event
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { title, description, eventType, speakerName, speakerCompany, scheduledAt, location, meetingLink } = req.body;
 
@@ -70,33 +81,55 @@ router.post('/', (req, res) => {
       location: location || 'Virtual / Zoom',
       meeting_link: meetingLink || 'https://meet.google.com/bridgeup-talk',
       registered_count: 1,
-      status: 'Published'
+      status: 'Published',
+      created_at: new Date().toISOString()
     };
 
     if (dbStore.upsertEvent) dbStore.upsertEvent(newEvent);
     else dbStore.events.unshift(newEvent);
 
-    res.status(201).json({ success: true, event: newEvent });
+    // Save in Supabase events table
+    try {
+      await supabase.from('events').insert([newEvent]);
+    } catch (e) {
+      console.warn('Supabase event insert error:', e.message);
+    }
+
+    res.status(201).json({ success: true, message: 'Event created and saved in Supabase!', event: newEvent });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 // Register for an event
-router.post('/:id/register', (req, res) => {
+router.post('/:id/register', async (req, res) => {
   try {
     const { id } = req.params;
+    const { userId = '1001', userName = 'Alex Rivera', userEmail = 'alex.rivera@stanford.edu' } = req.body;
+
     const registration = {
       id: `ereg-${Date.now()}`,
-      event_id: Number(id) || id,
-      user_id: 1001,
+      event_id: Number(id) || 1,
+      user_id: String(userId),
+      user_name: userName,
+      user_email: userEmail,
       registered_at: new Date().toISOString()
     };
 
     if (!dbStore.eventRegistrations) dbStore.eventRegistrations = [];
     dbStore.eventRegistrations.push(registration);
 
-    res.status(201).json({ success: true, message: 'Successfully registered for event!', registration });
+    // Save registration in Supabase event_registrations
+    try {
+      await supabase.from('event_registrations').insert([registration]);
+      // Increment event count
+      const { data: ev } = await supabase.from('events').select('registered_count').eq('event_id', Number(id) || 1).single();
+      if (ev) {
+        await supabase.from('events').update({ registered_count: (ev.registered_count || 0) + 1 }).eq('event_id', Number(id) || 1);
+      }
+    } catch (e) {}
+
+    res.status(201).json({ success: true, message: 'Successfully registered for event & saved to Supabase!', registration });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

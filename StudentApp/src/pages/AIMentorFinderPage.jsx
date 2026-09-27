@@ -54,10 +54,23 @@ const AIMentorFinderPage = () => {
   const handleSendRequest = async () => {
     if (!selectedMentor) return;
     try {
+      const userIdentifier = currentUser?.id || currentUser?.user_id || currentUser?.student_id || 'demo-1';
       await apiService.requestMentorship({
-        alumniId: selectedMentor.id,
-        mentorName: selectedMentor.name,
-        company: selectedMentor.company,
+        student_id: userIdentifier,
+        studentId: userIdentifier,
+        studentName: currentUser?.name || currentUser?.displayName || 'Student Mentee',
+        studentEmail: currentUser?.email || 'student@university.edu',
+        studentAvatar: currentUser?.avatar,
+        studentMajor: currentUser?.major || 'Computer Science',
+        studentCollege: currentUser?.college_name || 'Stanford University',
+        studentGpa: currentUser?.gpa || '3.85',
+        studentSkills: currentUser?.skills || ['React', 'Python'],
+        alumniId: selectedMentor.id || selectedMentor.alumni_id || selectedMentor.user_id,
+        alumni_id: selectedMentor.id || selectedMentor.alumni_id || selectedMentor.user_id,
+        mentorName: selectedMentor.name || selectedMentor.full_name,
+        mentorCompany: selectedMentor.company,
+        mentorAvatar: selectedMentor.avatar,
+        goal: goal || 'AI Mentorship Program',
         note: requestNote
       });
       setRequestSuccess(`Mentorship request successfully sent to ${selectedMentor.name}!`);

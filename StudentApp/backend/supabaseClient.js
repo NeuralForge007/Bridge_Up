@@ -9,10 +9,10 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://uknypaqumcsseydiyncz.supabase.co';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qcgekkenmgycmnhraxia.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 
   process.env.SUPABASE_ANON_KEY || 
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVrbnlwYXF1bWNzc2V5ZGl5bmN6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4OTQ3NzI2MSwiZXhwIjoyMTA1MDUzMjYxfQ.j__nXutWxIZ9k3U3kjhEIGU1xEdj0QBAbyrS8pym40k';
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFjZ2Vra2VubWd5Y21uaHJheGlhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDUwNDM3MSwiZXhwIjoyMTA2MDgwMzcxfQ.FR_k8rI75g3twaLNqQIT51_AHPspd_l--BIVRycen_M';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {

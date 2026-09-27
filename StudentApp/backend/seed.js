@@ -272,6 +272,9 @@ export async function runSeeder() {
     result: p.result || 'Winner',
     primary_skill: p.primary_skill || 'Full Stack'
   }));
+  try {
+    await supabase.from('hackathon_participants').upsert(dbStore.hackathonParticipants, { onConflict: 'participant_record_id' });
+  } catch (e) {}
 
   dbStore.hackathonPartnerRequests = rawPartnerReqs.map(pr => ({
     request_id: Number(pr.request_id),
@@ -282,6 +285,9 @@ export async function runSeeder() {
     preferred_location: pr.preferred_location || 'All India',
     status: pr.status || 'Open'
   }));
+  try {
+    await supabase.from('hackathon_partner_requests').upsert(dbStore.hackathonPartnerRequests, { onConflict: 'request_id' });
+  } catch (e) {}
 
   // 10. Seed Referrals
   const rawReferrals = getSheetData('Referrals');

@@ -63,7 +63,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',
     service: 'BridgeUp Backend API with Supabase Integration',
-    supabaseUrl: process.env.SUPABASE_URL || 'https://uknypaqumcsseydiyncz.supabase.co',
+    supabaseUrl: process.env.SUPABASE_URL || 'https://qcgekkenmgycmnhraxia.supabase.co',
     timestamp: new Date().toISOString(),
     version: '2.0.0'
   });
@@ -78,7 +78,7 @@ app.listen(PORT, async () => {
   console.log(`=================================================`);
   console.log(`🚀 BridgeUp Express Backend Server running!`);
   console.log(`📡 URL: http://localhost:${PORT}`);
-  console.log(`🗄️  Supabase URL: ${process.env.SUPABASE_URL || 'https://uknypaqumcsseydiyncz.supabase.co'}`);
+  console.log(`🗄️  Supabase URL: ${process.env.SUPABASE_URL || 'https://qcgekkenmgycmnhraxia.supabase.co'}`);
   console.log(`=================================================`);
 
   // Initialize and seed dataset from Excel and sync to Supabase

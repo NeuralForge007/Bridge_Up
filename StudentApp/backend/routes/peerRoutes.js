@@ -13,17 +13,26 @@ router.get('/', async (req, res) => {
 
     try {
       if (supabase && typeof supabase.from === 'function') {
-        let query = supabase.from('users').select('*').eq('role', 'student');
+        let query = supabase.from('students').select('*');
         if (excludeId) query = query.neq('id', excludeId);
         if (excludeEmail) query = query.neq('email', excludeEmail);
 
         const { data, error } = await query;
         if (!error && data && data.length > 0) {
           peers = data.map(p => ({
-            ...p,
-            jobTitle: p.job_title || '',
-            streakDays: p.streak_days || 1,
-            studyHoursWeek: p.study_hours_week || 12.0
+            id: p.id || `std-${p.student_id}`,
+            name: p.full_name || p.name || 'Student Peer',
+            email: p.email,
+            major: p.major || p.department || 'Computer Science',
+            skills: p.skills || ['JavaScript', 'React', 'Python'],
+            collegeId: p.college_id,
+            cgpa: p.cgpa || 8.5,
+            graduationYear: p.graduation_year || 2026,
+            jobTitle: 'Student',
+            streakDays: 7,
+            studyHoursWeek: 20.0,
+            verificationStatus: p.verification_status || 'Verified',
+            avatar: p.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(p.email || 'student')}`
           }));
         }
       }

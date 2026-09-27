@@ -135,7 +135,7 @@ function MainLayout() {
 
           {activePage === 'mentor-finder' && (
             currentUser ? (
-              <AIMentorFinderPage />
+              <AIMentorFinderPage setActivePage={handlePageChange} />
             ) : (
               <HomePage setActivePage={handlePageChange} onOpenAuth={() => setShowAuthModal(true)} />
             )
@@ -143,7 +143,7 @@ function MainLayout() {
 
           {activePage === 'alumni-dashboard' && (
             currentUser ? (
-              <AlumniDashboardPage />
+              <AlumniDashboardPage setActivePage={handlePageChange} />
             ) : (
               <HomePage setActivePage={handlePageChange} onOpenAuth={() => setShowAuthModal(true)} />
             )
@@ -207,7 +207,7 @@ function MainLayout() {
 
           {activePage === 'alumni-mentors' && (
             currentUser ? (
-              <AlumniMentorsPage />
+              <AlumniMentorsPage setActivePage={handlePageChange} />
             ) : (
               <HomePage setActivePage={handlePageChange} onOpenAuth={() => setShowAuthModal(true)} />
             )

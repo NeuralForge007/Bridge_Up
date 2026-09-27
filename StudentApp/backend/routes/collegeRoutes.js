@@ -1,13 +1,20 @@
 import express from 'express';
 import { dbStore } from '../dbStore.js';
+import { supabase } from '../supabaseClient.js';
 import { logUserActivity } from '../services/auditLogger.js';
 
 const router = express.Router();
 
 // 1. Get All Colleges
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const colleges = dbStore.getColleges();
+    let supaColleges = null;
+    try {
+      const { data, error } = await supabase.from('colleges').select('*').order('college_name');
+      if (!error && data && data.length > 0) supaColleges = data;
+    } catch (e) {}
+
+    const colleges = supaColleges || dbStore.getColleges();
     return res.json({ success: true, count: colleges.length, colleges });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -15,7 +22,7 @@ router.get('/', (req, res) => {
 });
 
 // 2. College Admin Dashboard Metrics & Verification Queues
-router.get('/:collegeId/dashboard', (req, res) => {
+router.get('/:collegeId/dashboard', async (req, res) => {
   try {
     const collegeId = Number(req.params.collegeId) || 1;
     const college = dbStore.getCollegeById(collegeId) || dbStore.getColleges()[0];
@@ -71,14 +78,29 @@ router.post('/verify-student', async (req, res) => {
     student.verification_status = status;
     dbStore.upsertStudent(student);
 
+    // Write to Supabase students and users tables
+    try {
+      await supabase.from('students').update({ verification_status: status }).or(`student_id.eq.${Number(studentId) || 0},id.eq.${studentId}`);
+      if (student.user_id || student.email) {
+        await supabase.from('users').update({ verification_status: status }).or(`id.eq.${student.user_id || studentId},email.eq.${student.email || ''}`);
+      }
+    } catch (e) {}
+
     // Notify student
-    dbStore.createNotification({
+    const notif = {
+      id: `notif-${Date.now()}`,
       user_id: `STUDENT-${studentId}`,
       type: 'VERIFICATION',
       title: status === 'Verified' ? 'Student Verification Approved!' : 'Student Verification Update',
       message: `Your college administration has updated your status to: ${status}`,
-      link: '/dashboard'
-    });
+      link: '/dashboard',
+      created_at: new Date().toISOString()
+    };
+    dbStore.createNotification(notif);
+
+    try {
+      await supabase.from('notifications').insert([notif]);
+    } catch (e) {}
 
     await logUserActivity({
       userId: collegeAdminId || 'college_admin',
@@ -89,7 +111,7 @@ router.post('/verify-student', async (req, res) => {
       req
     });
 
-    return res.json({ success: true, message: `Student verification updated to ${status}!`, student });
+    return res.json({ success: true, message: `Student verification updated to ${status} in Supabase!`, student });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -107,14 +129,29 @@ router.post('/verify-alumni', async (req, res) => {
     alumni.verification_status = status;
     dbStore.upsertAlumni(alumni);
 
+    // Write to Supabase alumni and users tables
+    try {
+      await supabase.from('alumni').update({ verification_status: status }).or(`alumni_id.eq.${Number(alumniId) || 0},id.eq.${alumniId}`);
+      if (alumni.user_id || alumni.email) {
+        await supabase.from('users').update({ verification_status: status }).or(`id.eq.${alumni.user_id || alumniId},email.eq.${alumni.email || ''}`);
+      }
+    } catch (e) {}
+
     // Notify alumni
-    dbStore.createNotification({
+    const notif = {
+      id: `notif-${Date.now()}`,
       user_id: `ALUMNI-${alumniId}`,
       type: 'VERIFICATION',
       title: status === 'Verified' ? 'Alumni Verification Approved!' : 'Alumni Verification Update',
       message: `Your college administration has verified your alumni credentials.`,
-      link: '/alumni-dashboard'
-    });
+      link: '/alumni-dashboard',
+      created_at: new Date().toISOString()
+    };
+    dbStore.createNotification(notif);
+
+    try {
+      await supabase.from('notifications').insert([notif]);
+    } catch (e) {}
 
     await logUserActivity({
       userId: collegeAdminId || 'college_admin',
@@ -125,7 +162,7 @@ router.post('/verify-alumni', async (req, res) => {
       req
     });
 
-    return res.json({ success: true, message: `Alumni verification updated to ${status}!`, alumni });
+    return res.json({ success: true, message: `Alumni verification updated to ${status} in Supabase!`, alumni });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

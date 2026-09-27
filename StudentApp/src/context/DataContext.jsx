@@ -322,8 +322,12 @@ export const DataProvider = ({ children }) => {
   useEffect(() => {
     refreshPeers();
     loadInitialData();
-    const interval = setInterval(refreshPeers, 15000);
-    return () => clearInterval(interval);
+    const intervalPeers = setInterval(refreshPeers, 15000);
+    const intervalData = setInterval(loadInitialData, 6000);
+    return () => {
+      clearInterval(intervalPeers);
+      clearInterval(intervalData);
+    };
   }, [refreshPeers, loadInitialData]);
 
   // Toggle connection status with a peer (persisted in Supabase)

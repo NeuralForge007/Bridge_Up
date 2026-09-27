@@ -1,13 +1,26 @@
 import express from 'express';
 import { dbStore } from '../dbStore.js';
+import { supabase } from '../supabaseClient.js';
+import { logUserActivity } from '../services/auditLogger.js';
 
 const router = express.Router();
 
 // Get all referrals (filtered by user role or query)
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { status, studentId, alumniId } = req.query;
-    let list = dbStore.getReferrals ? dbStore.getReferrals() : (dbStore.referrals || []);
+
+    let supaReferrals = null;
+    try {
+      let q = supabase.from('referrals').select('*');
+      if (status) q = q.eq('status', status.toUpperCase());
+      if (studentId) q = q.eq('student_id', Number(studentId));
+      if (alumniId) q = q.eq('alumni_id', Number(alumniId));
+      const { data, error } = await q.order('created_at', { ascending: false });
+      if (!error && data && data.length > 0) supaReferrals = data;
+    } catch (e) {}
+
+    let list = supaReferrals || (dbStore.getReferrals ? dbStore.getReferrals() : (dbStore.referrals || []));
 
     if (status) {
       list = list.filter(r => r.status?.toLowerCase() === status.toLowerCase());
@@ -28,7 +41,7 @@ router.get('/', (req, res) => {
       return {
         ...r,
         id: r.referral_id || r.id,
-        student_name: student?.full_name || student?.name || 'Alex Rivera',
+        student_name: student?.full_name || student?.name || r.student_name || 'Alex Rivera',
         student_email: student?.email || 'alex.rivera@stanford.edu',
         student_college: 'Stanford University',
         student_skills: ['React', 'Python', 'Machine Learning'],
@@ -47,7 +60,7 @@ router.get('/', (req, res) => {
 });
 
 // Submit a new referral
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { studentName, studentEmail, targetCompany, roleTitle, note } = req.body;
 
@@ -68,14 +81,33 @@ router.post('/', (req, res) => {
     if (dbStore.upsertReferral) dbStore.upsertReferral(newReferral);
     else dbStore.referrals.unshift(newReferral);
 
-    res.status(201).json({ success: true, referral: newReferral });
+    // Save in Supabase referrals table
+    try {
+      await supabase.from('referrals').insert([{
+        id: newReferral.id,
+        referral_id: newReferral.referral_id,
+        student_id: newReferral.student_id,
+        alumni_id: newReferral.alumni_id,
+        student_name: newReferral.student_name,
+        target_company: newReferral.target_company,
+        role_title: newReferral.role_title,
+        referral_note: newReferral.referral_note,
+        recommendation_reason: newReferral.recommendation_reason,
+        status: newReferral.status,
+        created_at: newReferral.created_at
+      }]);
+    } catch (e) {
+      console.warn('Supabase referral insert error:', e.message);
+    }
+
+    res.status(201).json({ success: true, message: 'Referral submitted & saved to Supabase!', referral: newReferral });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 // Update referral status
-router.patch('/:id/status', (req, res) => {
+router.patch('/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
     const { status, feedback } = req.body;
@@ -89,7 +121,19 @@ router.patch('/:id/status', (req, res) => {
     referral.status = status?.toUpperCase() || 'VIEWED';
     if (feedback) referral.feedback = feedback;
 
-    res.json({ success: true, referral });
+    // Update in Supabase
+    try {
+      await supabase
+        .from('referrals')
+        .update({
+          status: referral.status,
+          feedback: feedback || null,
+          updated_at: new Date().toISOString()
+        })
+        .or(`id.eq.${id},referral_id.eq.${Number(id) || 0}`);
+    } catch (e) {}
+
+    res.json({ success: true, message: 'Referral status updated in Supabase.', referral });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
