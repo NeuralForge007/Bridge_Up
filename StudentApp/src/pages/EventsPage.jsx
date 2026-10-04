@@ -1,23 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/api';
 
 const EventsPage = () => {
-  const { currentUser } = useAuth();
   const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [registeredEvents, setRegisteredEvents] = useState([]);
   const [successMsg, setSuccessMsg] = useState('');
 
   const loadEvents = async () => {
-    setLoading(true);
     try {
       const data = await apiService.getEvents();
       setEvents(data || []);
     } catch (err) {
       console.error('Failed to load events:', err);
-    } finally {
-      setLoading(false);
     }
   };
 

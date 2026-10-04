@@ -1,139 +1,146 @@
-# BridgeUp — AI-Powered Alumni Engagement & Mentorship Platform
+# BridgeUp — AI-Powered Alumni Engagement, Hackathon Teammate Matching & Mentorship Platform
 
-BridgeUp connects undergraduate students with verified college alumni who have reached their target roles, companies, and career destinations.
+BridgeUp connects undergraduate students with verified college alumni mentors and high-compatibility hackathon teammates across premier partner institutions using Sentence-BERT semantic embeddings and adaptive hybrid re-ranking.
 
 ---
 
 ## 🏛 System Architecture
 
 ```text
-       ┌─────────────────────────────────────────────────────────────┐
-       │                   Student Frontend (React)                  │
-       │           AIMentorFinderPage / AlumniMentorsPage            │
-       └──────────────────────────────┬──────────────────────────────┘
-                                      │  POST /api/mentors/ai/match
-                                      ▼
-       ┌─────────────────────────────────────────────────────────────┐
-       │               Node.js / Express Backend (5001)              │
-       │                  Authentication & Validation                │
-       └──────────────────────────────┬──────────────────────────────┘
-                                      │  POST /recommend
-                                      ▼
-       ┌─────────────────────────────────────────────────────────────┐
-       │             Python FastAPI AI Microservice (8001)           │
-       │                                                             │
-       │  1. Deterministic NLP Intent Parser                         │
-       │     (RapidFuzz + Role/Company/Domain Alias Dictionaries)    │
-       │                                                             │
-       │  2. SBERT Semantic Encoder                                  │
-       │     (sentence-transformers/all-MiniLM-L6-v2 -> 384-D)       │
-       │                                                             │
-       │  3. Stage 1: Retrieval with Hard Filters (pgvector RPC)     │
-       │     - Same College (college_id = student.college_id)        │
-       │     - Verified Alumni Only                                  │
-       │     - Cosine Similarity Search (Top 30 Candidates)          │
-       │                                                             │
-       │  4. Stage 2: Adaptive 8-Factor Hybrid Re-Ranking            │
-       │     - Semantic (25%) + Role (25%) + Company (20%) +         │
-       │       Skills (15%) + Domain (5%) + Experience (5%) +        │
-       │       Availability (3%) + Rating (2%)                       │
-       │                                                             │
-       │  5. Explainable AI Deterministic Rationale Generator        │
-       └──────────────────────────────┬──────────────────────────────┘
-                                      │
-                                      ▼
-       ┌─────────────────────────────────────────────────────────────┐
-       │               Supabase PostgreSQL + pgvector                │
-       │  - alumni (300 records from Kolkata dataset)                │
-       │  - alumni_skills (Normalized skill graph)                   │
-       │  - alumni_ai_profiles (pgvector 384-d embeddings)           │
-       │  - recommendation_events (Telemetry & Feedback)            │
-       └─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                                 React Frontend (Port 5174)                              │
+│   • AIMentorFinderPage (Alumni Matcher) • HackathonsPage (Finder) • AuthModal (Auth)   │
+└───────────────────────────────────────────┬────────────────────────────────────────────┘
+                                            │ Authenticated REST APIs
+                                            ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                            Node.js / Express Backend (Port 5001)                       │
+│   • /api/auth (bcrypt, registration, token generation, async SBERT indexing)           │
+│   • /api/mentors/ai/match (Resolves authenticated student, enforces same college)      │
+│   • /api/hackathons (Hackathons, Requirements, Recommendations, Join Requests)         │
+│   • /api/team-join-requests (Incoming / Outgoing lifecycle, atomic acceptance)         │
+└───────────────────────────┬────────────────────────────────────────┬───────────────────┘
+                            │                                        │
+             Internal HTTP  │                                        │ Supabase Client
+             POST /recommend│                                        │ (PostgreSQL REST)
+                            ▼                                        ▼
+┌───────────────────────────────────────────────┐ ┌──────────────────────────────────────┐
+│       Python FastAPI Microservice (8001)      │ │            Supabase Cloud            │
+│  • Sentence-BERT (all-MiniLM-L6-v2, 384-D)    │ │  • students (600 profiles)           │
+│  • Fast cosine vector retrieval               │ │  • student_skills (4,788 rows)       │
+│  • Alumni Matcher (8-Factor adaptive rerank)  │ │  • alumni (300 records)              │
+│  • Teammate Recommender (9-Factor rerank)     │ │  • hackathons (4 upcoming)           │
+│  • Deterministic rationale generator          │ │  • mentorships / requests            │
+└───────────────────────────────────────────────┘ └──────────────────────────────────────┘
 ```
 
 ---
 
-## 📊 Master Alumni Dataset
-- **Source of Truth**: `backend/bridgeup_kolkata_alumni_dataset.csv`
-- **Total Records**: 300 Alumni (IDs: `1001` - `1300`)
-- **Colleges Supported**:
-  1. Institute of Engineering and Management (IEM) — 100 Alumni
-  2. Jadavpur University (JU) — 50 Alumni
-  3. University of Calcutta (CU) — 50 Alumni
-  4. IIT Kharagpur (IIT KGP) — 50 Alumni
-  5. NIT Durgapur (NIT DGP) — 50 Alumni
-- **Career Roles (8 Broad Categories)**: AI Research Scientist, Machine Learning Engineer, Cybersecurity Analyst, Software Engineer, Data Scientist, Cloud/DevOps Engineer, Embedded/Robotics Engineer, Product Manager.
-- **Organizations**: Google, Amazon, Microsoft, Meta, NVIDIA, DRDO, ISRO, TCS, Infosys, Deloitte, Goldman Sachs, JPMorgan Chase, IBM, Adobe, Flipkart, Walmart Global Tech, Samsung R&D, Bosch, Atlassian, Siemens, Tata Elxsi, Accenture.
+## 🌟 Core Implemented Features
+
+### 1. AI Alumni Mentor Matcher (Repaired & Fully Explainable)
+- **Constraint Enforcement**: Strictly confines recommendations to verified alumni of the authenticated student's own college.
+- **SBERT Embeddings**: Embeds query into 384 dimensions using `sentence-transformers/all-MiniLM-L6-v2`.
+- **Adaptive 8-Factor Reranking**:
+  - Semantic similarity (25%) + Target role match (25%) + Target company match (20%) + Skill compatibility (15%) + Career domain (5%) + Experience (5%) + Availability (3%) + Mentor rating (2%).
+- **Score Integrity**: Removed all fabricated defaults (`|| 85`, `|| 88`). Missing score data is an error; returns honest `EXACT`, `STRONG`, and `RELATED` classifications with detailed score breakdowns and evidence-based explanations.
+- **Fail-Safe**: Returns structured `503 AI_SERVICE_UNAVAILABLE` if FastAPI is unreachable.
+
+### 2. AI Hackathon Teammate Finder & Join Request Lifecycle
+- **Hackathon Explorer**: Real-time listing of upcoming hackathons with domains, team size constraints, prizes, and deadlines.
+- **Team Requirements**: Multi-select skills, desired roles, pitch, open slots, and optional college/gender filters (applied strictly only when specified).
+- **Candidate Hard Filters**: Excludes requester, inactive/hidden profiles, and members not open to team requests.
+- **Adaptive 9-Factor Scoring**:
+  - Required skills coverage (35%) + Semantic role/project compatibility (20%) + Hackathon experience (12%) + Project experience (12%) + Preferred team role (8%) + Domain compatibility (5%) + Collaboration mode (4%) + Teammate rating (2%) + Response rate (2%).
+- **Separation of Matches**: Distinguishes between `matches` (meeting all hard minimums) and `near_matches` (highlighting specific unmet thresholds).
+- **Atomic Join Requests**: Request tracking (`PENDING`, `ACCEPTED`, `REJECTED`, `WITHDRAWN`), duplicate prevention, and participant registration upon acceptance.
+
+### 3. Canonical Student Registration & Authentication
+- **Beside Login in AuthModal**: Seamless tabbed modal for Sign In and Create Student Account.
+- **Full Canonical Profile**: Collects all 39 CSV fields: identity, college, year, CGPA, career domain/goal, primary/multi-select skills, preferred roles, hackathon/project history, availability, collaboration mode, city, languages, and portfolio links.
+- **Security**: bcrypt password hashing (10 rounds), minimum 8-character validation, case-insensitive email uniqueness check, no plaintext passwords or password hashes leaked in responses.
+- **Async SBERT Vector Indexing**: Immediately indexes new student profiles into the vector repository upon successful registration.
 
 ---
 
-## 🚀 Quickstart Guide
+## 📊 Dataset Ingestion & Seeds
 
-### 1. Python AI Service Setup
-```bash
-cd ai_service
+### 1. Student Master Dataset (`data/bridgeup_student_dataset.csv`)
+- **Total Profiles**: 600 synthetic students
+- **College Distribution (5:2:2:2:1 Ratio)**:
+  - Institute of Engineering and Management (IEM): **250**
+  - Jadavpur University (JU): **100**
+  - University of Calcutta (CU): **100**
+  - IIT Kharagpur (IITKGP): **100**
+  - NIT Durgapur (NITDGP): **50**
+- **Normalized Skills**: 4,788 rows in `student_skills`
+- **Import Command**:
+  ```bash
+  npm run seed:students -- --file data/bridgeup_student_dataset.csv
+  ```
 
-# Install dependencies (100% Free & Open Source, Zero Paid APIs)
-pip install -r requirements.txt
+### 2. Alumni Master Dataset (`backend/bridgeup_kolkata_alumni_dataset.csv`)
+- **Total Records**: 300 verified alumni
+- **Import Command**:
+  ```bash
+  npm run seed:alumni
+  ```
 
-# Run FastAPI AI Service on port 8001
-python -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+---
+
+## 📈 Empirical Evaluation & Benchmark Results
+
+### 1. Alumni Mentor Matcher Benchmark (10 Diverse Test Cases)
+```text
+========================================================================================
+Metric                 | Legacy Keyword Matcher    | SBERT + pgvector Hybrid   | Improvement 
+----------------------------------------------------------------------------------------
+Precision@5            |                 6.00%     |                36.00%     |     +500.0%
+Recall@5               |                30.00%     |               100.00%     |     +233.3%
+MRR (Mean Recip. Rank) |                 0.250     |                 1.000     |     +300.0%
+NDCG@5                 |                 0.263     |                 1.000     |     +280.1%
+========================================================================================
 ```
 
-### 2. Node.js Express Backend Setup
-```bash
-cd backend
-
-# Install dependencies
-npm install
-
-# Seed the master CSV dataset into Supabase and in-memory store
-npm run seed
-
-# Start backend server on port 5001
-npm start
+### 2. Hackathon Teammate Recommender Benchmark (8 Multi-Domain Cases)
+```text
+========================================================================================
+Metric                         | SBERT + pgvector Teammate Matcher
+----------------------------------------------------------------------------------------
+Precision@5                    |                  85.00%
+Recall@5                       |                  34.30%
+MRR (Mean Reciprocal Rank)     |                  0.812
+NDCG@5                         |                  0.833
+========================================================================================
 ```
 
-### 3. React Frontend Setup
+---
+
+## 🚀 Execution Commands
+
+### 1. Start FastAPI AI Microservice (Port 8001)
 ```bash
-# In the root StudentApp folder
-npm install
+python -m uvicorn ai_service.main:app --host 0.0.0.0 --port 8001
+```
+- Health check: `GET http://localhost:8001/health`
+- Readiness check: `GET http://localhost:8001/ready`
+
+### 2. Start Express Backend Server (Port 5001)
+```bash
+node backend/server.js
+```
+- Health check: `GET http://localhost:5001/api/health`
+
+### 3. Start React Frontend (Port 5174)
+```bash
 npm run dev
 ```
 
----
-
-## 🔄 Re-indexing Alumni Embeddings
-
-To regenerate/upsert Sentence-BERT 384-D vector embeddings for all alumni:
+### 4. Run Automated Test & Evaluation Suites
 ```bash
-python -m ai_service.embeddings.index_alumni
+# Full-stack integration test suite (28 automated checks)
+node backend/test_suite.js
+
+# Complete Python AI benchmark evaluation suite (Precision, Recall, MRR, NDCG)
+python -m ai_service.evaluation.evaluate_all
 ```
-
-Or via REST API:
-- `POST http://localhost:8001/index/all` — Reindexes all verified alumni.
-- `POST http://localhost:8001/index/alumni/{alumni_id}` — Reindexes a single alumnus on profile update.
-
----
-
-## 📈 AI Evaluation & Benchmark Suite
-
-Evaluate Precision@5, Recall@5, MRR, and NDCG@5 comparing the new SBERT + pgvector hybrid engine against the legacy rule-based matcher across all 5 colleges:
-```bash
-python -m ai_service.evaluation.evaluate
-```
-
-### 🎯 Measured Benchmark Results:
-| Metric | Legacy Keyword Matcher | SBERT + pgvector Hybrid Re-ranker | Improvement |
-| :--- | :---: | :---: | :---: |
-| **Precision@5** | 6.00% | **36.00%** | **+500.0%** |
-| **Recall@5** | 30.00% | **100.00%** | **+233.3%** |
-| **MRR (Mean Reciprocal Rank)** | 0.250 | **1.000** | **+300.0%** |
-| **NDCG@5** | 0.263 | **1.000** | **+280.1%** |
-
----
-
-## 🔒 Security & Privacy
-- Zero paid AI APIs (No OpenAI, No Pinecone).
-- Supabase service role keys reside strictly on backend servers.
-- Embeddings contain strictly career trajectory data; sensitive student/alumni PII (phone, password, email) is never embedded into vector representations.

@@ -7,7 +7,6 @@ const RecruiterDashboardPage = () => {
   const [candidates, setCandidates] = useState([]);
   const [shortlisted, setShortlisted] = useState([]);
   const [metrics, setMetrics] = useState(null);
-  const [loading, setLoading] = useState(true);
 
   // Filters
   const [searchSkill, setSearchSkill] = useState('');
@@ -16,7 +15,6 @@ const RecruiterDashboardPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   const loadCandidates = async () => {
-    setLoading(true);
     try {
       const [cands, mets] = await Promise.all([
         apiService.getRecruiterCandidates({

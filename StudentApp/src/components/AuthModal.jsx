@@ -1,50 +1,99 @@
 import React, { useState } from 'react';
 import { useAuth, AVATAR_PRESETS } from '../context/AuthContext';
 
-const AuthModal = ({ isOpen, onClose, defaultTab = 'login', initialRole = 'STUDENT' }) => {
-  const { login, signup, quickLogin, demoUsers } = useAuth();
-  const [tab, setTab] = useState(defaultTab); // 'login' | 'signup' | 'demo'
+const CANONICAL_COLLEGES = [
+  { id: 1, name: 'Institute of Engineering and Management', code: 'IEM' },
+  { id: 2, name: 'Jadavpur University', code: 'JU' },
+  { id: 3, name: 'University of Calcutta', code: 'CU' },
+  { id: 4, name: 'IIT Kharagpur', code: 'IITKGP' },
+  { id: 5, name: 'NIT Durgapur', code: 'NITDGP' }
+];
+
+const SKILL_SUGGESTIONS = [
+  'Python', 'React', 'Node.js', 'TypeScript', 'Java', 'C++', 'PyTorch', 'TensorFlow',
+  'PostgreSQL', 'Docker', 'AWS', 'FastAPI', 'Figma', 'Solidity', 'GraphQL', 'Embedded Systems'
+];
+
+const ROLE_SUGGESTIONS = [
+  'Full Stack Developer', 'Frontend Developer', 'Backend Developer', 'ML Engineer',
+  'Data Scientist', 'Robotics Engineer', 'UI/UX Designer', 'Cloud/DevOps Engineer', 'Pitch and Presentation Lead'
+];
+
+const DOMAIN_SUGGESTIONS = [
+  'AI for Social Good', 'FinTech', 'Healthcare', 'Sustainability', 'Smart Cities',
+  'EdTech', 'Cybersecurity', 'Web3', 'Disaster Management', 'Open Innovation'
+];
+
+const AuthModal = ({ isOpen, onClose, defaultTab = 'login' }) => {
+  const { login, signup } = useAuth();
+  const [tab, setTab] = useState(defaultTab); // 'login' | 'signup'
   
-  // Login state
+  // Login State
   const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('password123');
+  const [loginPassword, setLoginPassword] = useState('');
 
-  // Signup state
-  const [role, setRole] = useState(initialRole);
-
-  // Sync state with incoming props when opening
-  React.useEffect(() => {
-    if (isOpen) {
-      if (defaultTab) setTab(defaultTab);
-      if (initialRole) setRole(initialRole);
-      setError('');
-    }
-  }, [isOpen, defaultTab, initialRole]);
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  // Student Registration State
+  const [fullName, setFullName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
-  const [collegeName, setCollegeName] = useState('Institute of Engineering and Management');
-  const [major, setMajor] = useState('Computer Science');
-  const [year, setYear] = useState('Junior (Year 3)');
-  const [gpa, setGpa] = useState('8.85');
-  const [company, setCompany] = useState('');
-  const [roleTitle, setRoleTitle] = useState('');
-  const [skills, setSkills] = useState('React, Python, Machine Learning, Tailwind CSS');
-  const [headline, setHeadline] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [gender, setGender] = useState('Prefer not to say');
+  const [collegeNetwork, setCollegeNetwork] = useState('1');
+  const [yearOfStudy, setYearOfStudy] = useState(1);
+  const [graduationYear, setGraduationYear] = useState(2028);
+  const [degree, setDegree] = useState('B.Tech');
+  const [department, setDepartment] = useState('Computer Science and Engineering');
+  const [cgpa, setCgpa] = useState('8.50');
+  
+  // Career & Skills
+  const [careerDomain, setCareerDomain] = useState('Software Engineering');
+  const [careerGoal, setCareerGoal] = useState('Build expertise in Software Engineering and contribute to impactful technology projects');
+  const [primarySkill, setPrimarySkill] = useState('Python');
+  const [selectedSkills, setSelectedSkills] = useState(['Python', 'React', 'SQL']);
+  const [customSkill, setCustomSkill] = useState('');
+  const [preferredRoles, setPreferredRoles] = useState(['Full Stack Developer']);
+  
+  // Experience & Collaboration
+  const [hackathonsParticipated, setHackathonsParticipated] = useState(2);
+  const [hackathonsFinalist, setHackathonsFinalist] = useState(1);
+  const [hackathonsWon, setHackathonsWon] = useState(0);
+  const [totalProjects, setTotalProjects] = useState(4);
+  const [successfulProjects, setSuccessfulProjects] = useState(3);
+  const [selectedDomains, setSelectedDomains] = useState(['AI for Social Good', 'Sustainability']);
+  const [teamLeadership, setTeamLeadership] = useState(true);
+  const [availability, setAvailability] = useState('Available');
+  const [collaborationMode, setCollaborationMode] = useState('Any');
+  const [city, setCity] = useState('Kolkata');
+  const [languages, setLanguages] = useState('English, Hindi, Bengali');
+  const [githubUrl, setGithubUrl] = useState('');
+  const [linkedinUrl, setLinkedinUrl] = useState('');
+  const [bio, setBio] = useState('');
+  const [openToTeamRequests, setOpenToTeamRequests] = useState(true);
   const [selectedAvatar, setSelectedAvatar] = useState(AVATAR_PRESETS[0]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  React.useEffect(() => {
+    if (isOpen) {
+      if (defaultTab) setTab(defaultTab);
+      setError('');
+    }
+  }, [isOpen, defaultTab]);
+
   if (!isOpen) return null;
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
     setError('');
+    if (!loginEmail.trim() || !loginPassword) {
+      setError('Please provide both email and password.');
+      return;
+    }
     setLoading(true);
     try {
-      await login(loginEmail, loginPassword);
+      await login(loginEmail.trim(), loginPassword);
       onClose();
     } catch (err) {
       setError(err.message || 'Invalid email or password');
@@ -53,54 +102,161 @@ const AuthModal = ({ isOpen, onClose, defaultTab = 'login', initialRole = 'STUDE
     }
   };
 
+  const handleToggleSkill = (s) => {
+    if (selectedSkills.includes(s)) {
+      setSelectedSkills(selectedSkills.filter(x => x !== s));
+    } else {
+      setSelectedSkills([...selectedSkills, s]);
+    }
+  };
+
+  const handleAddCustomSkill = (e) => {
+    if (e) e.preventDefault();
+    if (customSkill.trim() && !selectedSkills.includes(customSkill.trim())) {
+      setSelectedSkills([...selectedSkills, customSkill.trim()]);
+      setCustomSkill('');
+    }
+  };
+
+  const handleToggleRole = (r) => {
+    if (preferredRoles.includes(r)) {
+      setPreferredRoles(preferredRoles.filter(x => x !== r));
+    } else {
+      setPreferredRoles([...preferredRoles, r]);
+    }
+  };
+
+  const handleToggleDomain = (d) => {
+    if (selectedDomains.includes(d)) {
+      setSelectedDomains(selectedDomains.filter(x => x !== d));
+    } else {
+      setSelectedDomains([...selectedDomains, d]);
+    }
+  };
+
   const handleSignupSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
     setError('');
-    setLoading(true);
 
-    if (role === 'STUDENT') {
-      const gpaNum = parseFloat(gpa);
-      if (isNaN(gpaNum) || gpaNum < 0 || gpaNum > 10) {
-        setError('Please enter a valid CGPA between 0.0 and 10.0');
-        setLoading(false);
-        return;
-      }
+    // Validations
+    if (!fullName.trim() || !signupEmail.trim()) {
+      setError('Full name and email are required.');
+      return;
+    }
+    if (!signupPassword || signupPassword.length < 8) {
+      setError('Password must be at least 8 characters long.');
+      return;
+    }
+    if (signupPassword !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
     }
 
+    const numCgpa = parseFloat(cgpa);
+    if (isNaN(numCgpa) || numCgpa < 0 || numCgpa > 10.0) {
+      setError('Please enter a valid CGPA between 0.0 and 10.0.');
+      return;
+    }
+
+    if (Number(successfulProjects) > Number(totalProjects)) {
+      setError('Successful projects cannot exceed total projects.');
+      return;
+    }
+
+    if (Number(hackathonsWon) > Number(hackathonsFinalist) || Number(hackathonsFinalist) > Number(hackathonsParticipated)) {
+      setError('Hackathons won must be ≤ finalists ≤ participated.');
+      return;
+    }
+
+    const selectedCollegeValue = String(collegeNetwork ?? '').trim();
+    if (!selectedCollegeValue) {
+      setError('Please select a valid college network.');
+      return;
+    }
+
+    const selectedCollege = CANONICAL_COLLEGES.find(
+      item =>
+        String(item.id) === selectedCollegeValue ||
+        String(item.code).toLowerCase() === selectedCollegeValue.toLowerCase() ||
+        item.name.toLowerCase() === selectedCollegeValue.toLowerCase()
+    );
+
+    if (!selectedCollege) {
+      setError('Please select a valid college network.');
+      return;
+    }
+
+    setLoading(true);
     try {
       await signup({
-        role,
-        firstName,
-        lastName,
-        name: `${firstName} ${lastName}`,
-        email: signupEmail,
+        full_name: fullName.trim(),
+        name: fullName.trim(),
+        email: signupEmail.trim(),
         password: signupPassword,
-        collegeName,
-        major,
-        year,
-        gpa,
-        company,
-        roleTitle,
-        skills,
-        headline,
+        confirm_password: confirmPassword,
+        gender,
+        collegeNetwork: selectedCollege.name,
+        collegeId: selectedCollege.id,
+        college_id: selectedCollege.id,
+        collegeName: selectedCollege.name,
+        college_name: selectedCollege.name,
+        year_of_study: Number(yearOfStudy),
+        yearOfStudy: Number(yearOfStudy),
+        graduation_year: Number(graduationYear),
+        graduationYear: Number(graduationYear),
+        degree,
+        department,
+        cgpa: numCgpa,
+        career_domain: careerDomain,
+        careerDomain: careerDomain,
+        career_goal: careerGoal,
+        careerGoal: careerGoal,
+        primary_skill: primarySkill || selectedSkills[0] || 'Python',
+        primarySkill: primarySkill || selectedSkills[0] || 'Python',
+        skills: selectedSkills,
+        preferred_team_roles: preferredRoles,
+        preferredTeamRoles: preferredRoles,
+        hackathons_participated: Number(hackathonsParticipated),
+        hackathonsParticipated: Number(hackathonsParticipated),
+        hackathons_finalist: Number(hackathonsFinalist),
+        hackathonsFinalist: Number(hackathonsFinalist),
+        hackathons_won: Number(hackathonsWon),
+        hackathonsWon: Number(hackathonsWon),
+        total_projects: Number(totalProjects),
+        totalProjects: Number(totalProjects),
+        successful_projects: Number(successfulProjects),
+        successfulProjects: Number(successfulProjects),
+        project_domains: selectedDomains,
+        projectDomains: selectedDomains,
+        team_leadership_experience: teamLeadership,
+        teamLeadershipExperience: teamLeadership,
+        availability,
+        collaboration_mode: collaborationMode,
+        collaborationMode: collaborationMode,
+        city,
+        languages: languages.split(',').map(l => l.trim()).filter(Boolean),
+        github_url: githubUrl,
+        githubUrl: githubUrl,
+        linkedin_url: linkedinUrl,
+        linkedinUrl: linkedinUrl,
+        bio: bio || `Student at ${selectedCollege.name}`,
+        open_to_team_requests: openToTeamRequests,
+        openToTeamRequests: openToTeamRequests,
         avatar: selectedAvatar
       });
+
       onClose();
     } catch (err) {
-      setError(err.message || 'Registration failed');
+      setError(err.message || 'Registration failed.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDemoSelect = (user) => {
-    quickLogin(user);
-    onClose();
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-2xl rounded-3xl border border-slate-800 bg-slate-900/95 p-6 sm:p-8 shadow-2xl backdrop-blur-xl my-8">
+      <div className="relative w-full max-w-3xl rounded-3xl border border-slate-800 bg-slate-900/95 p-6 sm:p-8 shadow-2xl backdrop-blur-xl my-8 max-h-[90vh] overflow-y-auto">
         
         {/* Close Button */}
         <button
@@ -114,13 +270,11 @@ const AuthModal = ({ isOpen, onClose, defaultTab = 'login', initialRole = 'STUDE
 
         {/* Header */}
         <div className="text-center mb-6">
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-400 text-white shadow-lg shadow-blue-500/25 mb-3">
-            <svg width="24" height="24" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
+          <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white shadow-lg shadow-blue-500/25 mb-3">
+            <span className="text-xl font-black">B</span>
           </div>
-          <h2 className="text-2xl font-black text-white">Welcome to NEXT<span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">STEP</span></h2>
-          <p className="text-xs text-slate-400 mt-1">Centralized Alumni Network, AI Mentorship & Career Platform</p>
+          <h2 className="text-2xl font-black text-white">Bridge<span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Up</span></h2>
+          <p className="text-xs text-slate-400 mt-1">AI Alumni Mentorship & Hackathon Teammate Matching Platform</p>
         </div>
 
         {/* Tab Selector */}
@@ -139,330 +293,509 @@ const AuthModal = ({ isOpen, onClose, defaultTab = 'login', initialRole = 'STUDE
               tab === 'signup' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
             }`}
           >
-            Register Account
-          </button>
-          <button
-            onClick={() => { setTab('demo'); setError(''); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-              tab === 'demo' ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow' : 'text-purple-400 hover:text-white'
-            }`}
-          >
-            ⚡ 1-Click Demo
+            Create Student Account
           </button>
         </div>
 
         {/* Error Alert */}
         {error && (
-          <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400 flex items-center gap-2">
-            <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>{error}</span>
+          <div className="mb-6 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3.5 text-xs text-rose-300 flex items-center justify-between">
+            <span>⚠️ {error}</span>
+            <button onClick={() => setError('')} className="text-rose-300 hover:text-white">✕</button>
           </div>
         )}
 
-        {/* ──────────────── 1-Click Demo Tab ──────────────── */}
-        {tab === 'demo' && (
-          <div className="space-y-4">
-            <p className="text-xs text-slate-400 text-center mb-4">
-              Select any pre-configured role profile to explore full system capabilities instantly:
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-1">
-              {demoUsers.map((u) => {
-                const getRoleColor = (r) => {
-                  if (r === 'ALUMNI') return 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400';
-                  if (r === 'RECRUITER') return 'border-purple-500/30 bg-purple-500/5 text-purple-400';
-                  if (r === 'COLLEGE_ADMIN') return 'border-amber-500/30 bg-amber-500/5 text-amber-400';
-                  if (r === 'SUPER_ADMIN') return 'border-rose-500/30 bg-rose-500/5 text-rose-400';
-                  return 'border-blue-500/30 bg-blue-500/5 text-blue-400';
-                };
-
-                return (
-                  <button
-                    key={u.id || u.user_id}
-                    onClick={() => handleDemoSelect(u)}
-                    className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-3 text-left transition-all hover:scale-[1.02] hover:border-blue-500/50 hover:bg-slate-800/80"
-                  >
-                    <img
-                      src={u.avatar || AVATAR_PRESETS[0]}
-                      alt={u.name}
-                      className="h-12 w-12 rounded-xl border border-slate-700 bg-slate-800 shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold text-white truncate">{u.name}</p>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${getRoleColor(u.role)}`}>
-                          {u.role}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 truncate mt-0.5">{u.email}</p>
-                      <p className="text-[10px] text-slate-500 truncate mt-0.5">
-                        {u.company || u.college_name || u.major || 'Verified User'}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ──────────────── Sign In Tab ──────────────── */}
+        {/* 1. SIGN IN FORM */}
         {tab === 'login' && (
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
+          <form onSubmit={handleLoginSubmit} className="space-y-4 max-w-md mx-auto">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Email Address</label>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5">Email Address</label>
               <input
                 type="email"
                 required
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
-                placeholder="e.g. alex.rivera@stanford.edu"
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                placeholder="name@university.edu"
+                className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-white focus:border-blue-500 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Password</label>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5">Password</label>
               <input
                 type="password"
                 required
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="Enter your password"
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                placeholder="••••••••"
+                className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-white focus:border-blue-500 focus:outline-none"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 py-3 text-xs font-bold text-white shadow-lg shadow-blue-500/25 transition-all hover:brightness-110 disabled:opacity-50"
+              className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-3 text-xs font-bold text-white shadow-lg shadow-blue-500/25 hover:brightness-110 disabled:opacity-50 transition-all mt-2"
             >
               {loading ? 'Authenticating...' : 'Sign In to BridgeUp'}
             </button>
           </form>
         )}
 
-        {/* ──────────────── Register Account Tab ──────────────── */}
+        {/* 2. CANONICAL STUDENT REGISTRATION FORM */}
         {tab === 'signup' && (
-          <form onSubmit={handleSignupSubmit} className="space-y-4 max-h-[65vh] overflow-y-auto pr-2">
+          <form onSubmit={handleSignupSubmit} className="space-y-5">
             
-            {/* Role Picker */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">I am registering as:</label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: 'STUDENT', label: '🎓 Student' },
-                  { id: 'ALUMNI', label: '💼 Alumni / Mentor' },
-                  { id: 'RECRUITER', label: '🎯 Recruiter' }
-                ].map((r) => (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => setRole(r.id)}
-                    className={`rounded-xl border py-2 text-xs font-bold transition-all ${
-                      role === r.id
-                        ? 'border-blue-500 bg-blue-500/20 text-blue-300'
-                        : 'border-slate-800 bg-slate-950 text-slate-400 hover:text-white'
-                    }`}
+            {/* Account Credentials */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+              <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider">1. Account Credentials & Personal Identity</h4>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="e.g. Sayan Roy"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Email Address *</label>
+                  <input
+                    type="email"
+                    required
+                    value={signupEmail}
+                    onChange={(e) => setSignupEmail(e.target.value)}
+                    placeholder="student@bridgeup.example"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Password (min. 8 characters) *</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={signupPassword}
+                    onChange={(e) => setSignupPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Confirm Password *</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Gender</label>
+                  <select
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white"
                   >
-                    {r.label}
-                  </button>
-                ))}
+                    <option value="Prefer not to say">Prefer not to say</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Non-binary">Non-binary</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">City</label>
+                  <input
+                    type="text"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="Kolkata"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Avatar Selector (16 Cartoon Avatars) */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-semibold text-slate-300">Choose Professional Cartoon Avatar</label>
-                <span className="text-[10px] text-slate-500">16 styles available</span>
+            {/* Academic Information */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+              <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider">2. Academic Credentials</h4>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">College Network *</label>
+                  <select
+                    value={collegeNetwork}
+                    onChange={(e) => setCollegeNetwork(e.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white"
+                  >
+                    {CANONICAL_COLLEGES.map(c => (
+                      <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">CGPA (0 - 10) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="10"
+                    required
+                    value={cgpa}
+                    onChange={(e) => setCgpa(e.target.value)}
+                    placeholder="8.50"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Year of Study</label>
+                  <select
+                    value={yearOfStudy}
+                    onChange={(e) => setYearOfStudy(Number(e.target.value))}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white"
+                  >
+                    <option value="1">1st Year</option>
+                    <option value="2">2nd Year</option>
+                    <option value="3">3rd Year</option>
+                    <option value="4">4th Year</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Graduation Year</label>
+                  <input
+                    type="number"
+                    value={graduationYear}
+                    onChange={(e) => setGraduationYear(Number(e.target.value))}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Department / Branch</label>
+                  <input
+                    type="text"
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    placeholder="Computer Science & Engineering"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white"
+                  />
+                </div>
               </div>
-              <div className="grid grid-cols-8 gap-2 rounded-2xl border border-slate-800 bg-slate-950 p-2.5">
-                {AVATAR_PRESETS.map((avatarUrl, idx) => (
+            </div>
+
+            {/* Career Goals & Skills */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+              <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider">3. Career Goals & Skills</h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Career Domain</label>
+                  <select
+                    value={careerDomain}
+                    onChange={(e) => setCareerDomain(e.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white"
+                  >
+                    <option value="Software Engineering">Software Engineering</option>
+                    <option value="AI / Machine Learning">AI / Machine Learning</option>
+                    <option value="Data Science">Data Science</option>
+                    <option value="Web / Cloud">Web / Cloud</option>
+                    <option value="IoT / Embedded Systems">IoT / Embedded Systems</option>
+                    <option value="Hardware / Energy">Hardware / Energy</option>
+                    <option value="Product / Business">Product / Business</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Primary Skill</label>
+                  <input
+                    type="text"
+                    value={primarySkill}
+                    onChange={(e) => setPrimarySkill(e.target.value)}
+                    placeholder="e.g. Python"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Career Goal Statement</label>
+                <input
+                  type="text"
+                  value={careerGoal}
+                  onChange={(e) => setCareerGoal(e.target.value)}
+                  placeholder="e.g. Master distributed systems and lead AI product development"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-white"
+                />
+              </div>
+
+              {/* Skills Multi-select */}
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1.5">Technical Skills (Multi-select)</label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {SKILL_SUGGESTIONS.map(s => {
+                    const sel = selectedSkills.includes(s);
+                    return (
+                      <button
+                        type="button"
+                        key={s}
+                        onClick={() => handleToggleSkill(s)}
+                        className={`rounded-lg px-2 py-0.5 text-[10px] font-semibold border transition-all ${
+                          sel
+                            ? 'bg-blue-600 text-white border-blue-500'
+                            : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        {s} {sel && '✓'}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customSkill}
+                    onChange={(e) => setCustomSkill(e.target.value)}
+                    placeholder="Add other skill..."
+                    className="flex-1 rounded-xl border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-white"
+                  />
                   <button
+                    type="button"
+                    onClick={handleAddCustomSkill}
+                    className="rounded-xl bg-slate-800 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700"
+                  >
+                    + Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Preferred Roles */}
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1.5">Preferred Hackathon Roles</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {ROLE_SUGGESTIONS.map(r => {
+                    const sel = preferredRoles.includes(r);
+                    return (
+                      <button
+                        type="button"
+                        key={r}
+                        onClick={() => handleToggleRole(r)}
+                        className={`rounded-lg px-2 py-0.5 text-[10px] font-semibold border transition-all ${
+                          sel
+                            ? 'bg-amber-500 text-slate-950 border-amber-400'
+                            : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        {r} {sel && '✓'}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Hackathon & Experience Counts */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+              <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider">4. Experience & Hackathon Record</h4>
+
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 mb-1">Hackathons</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={hackathonsParticipated}
+                    onChange={(e) => setHackathonsParticipated(e.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 mb-1">Finalist</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={hackathonsFinalist}
+                    onChange={(e) => setHackathonsFinalist(e.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 mb-1">Won</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={hackathonsWon}
+                    onChange={(e) => setHackathonsWon(e.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 mb-1">Total Proj.</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={totalProjects}
+                    onChange={(e) => setTotalProjects(e.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 mb-1">Succ. Proj.</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={successfulProjects}
+                    onChange={(e) => setSuccessfulProjects(e.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Project Domains */}
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1.5">Project Domains</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {DOMAIN_SUGGESTIONS.map(d => {
+                    const sel = selectedDomains.includes(d);
+                    return (
+                      <button
+                        type="button"
+                        key={d}
+                        onClick={() => handleToggleDomain(d)}
+                        className={`rounded-lg px-2 py-0.5 text-[10px] font-semibold border transition-all ${
+                          sel
+                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                            : 'bg-slate-900 border-slate-800 text-slate-400'
+                        }`}
+                      >
+                        {d} {sel && '✓'}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Collaboration & Links */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+              <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider">5. Collaboration, Bio & Links</h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Collaboration Mode</label>
+                  <select
+                    value={collaborationMode}
+                    onChange={(e) => setCollaborationMode(e.target.value)}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2 text-xs text-white"
+                  >
+                    <option value="Any">Any Mode</option>
+                    <option value="Hybrid">Hybrid</option>
+                    <option value="In-person">In-person</option>
+                    <option value="Remote">Remote</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Languages (Comma-separated)</label>
+                  <input
+                    type="text"
+                    value={languages}
+                    onChange={(e) => setLanguages(e.target.value)}
+                    placeholder="English, Bengali, Hindi"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2 text-xs text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">GitHub URL (Optional)</label>
+                  <input
+                    type="url"
+                    value={githubUrl}
+                    onChange={(e) => setGithubUrl(e.target.value)}
+                    placeholder="https://github.com/username"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2 text-xs text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">LinkedIn URL (Optional)</label>
+                  <input
+                    type="url"
+                    value={linkedinUrl}
+                    onChange={(e) => setLinkedinUrl(e.target.value)}
+                    placeholder="https://linkedin.com/in/username"
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Bio / Self-Summary</label>
+                <textarea
+                  rows={2}
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  placeholder="Passionate engineering student excited about building impactful projects..."
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2 text-xs text-white"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="openToRequests"
+                  checked={openToTeamRequests}
+                  onChange={(e) => setOpenToTeamRequests(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-800 bg-slate-950 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="openToRequests" className="text-xs text-slate-300 font-medium">
+                  Open to receiving Hackathon team match requests
+                </label>
+              </div>
+            </div>
+
+            {/* Choose Avatar */}
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-300 mb-2">Choose Avatar</label>
+              <div className="flex flex-wrap gap-2">
+                {AVATAR_PRESETS.slice(0, 8).map((av, idx) => (
+                  <img
                     key={idx}
-                    type="button"
-                    onClick={() => setSelectedAvatar(avatarUrl)}
-                    className={`relative rounded-xl p-1 transition-all hover:scale-105 ${
-                      selectedAvatar === avatarUrl ? 'bg-blue-600 ring-2 ring-blue-400' : 'bg-slate-900'
+                    src={av}
+                    alt="avatar option"
+                    onClick={() => setSelectedAvatar(av)}
+                    className={`h-10 w-10 cursor-pointer rounded-xl border p-0.5 transition-all ${
+                      selectedAvatar === av
+                        ? 'border-blue-500 ring-2 ring-blue-500/50 bg-blue-500/20 scale-105'
+                        : 'border-slate-800 hover:border-slate-600'
                     }`}
-                  >
-                    <img src={avatarUrl} alt={`Avatar ${idx + 1}`} className="h-8 w-8 rounded-lg" />
-                  </button>
+                  />
                 ))}
               </div>
             </div>
 
-            {/* Basic Info */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">First Name</label>
-                <input
-                  type="text"
-                  required
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="Alex"
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Last Name</label>
-                <input
-                  type="text"
-                  required
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Rivera"
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Email & Password */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Email</label>
-                <input
-                  type="email"
-                  required
-                  value={signupEmail}
-                  onChange={(e) => setSignupEmail(e.target.value)}
-                  placeholder="alex@iem.edu.in"
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Password</label>
-                <input
-                  type="password"
-                  required
-                  value={signupPassword}
-                  onChange={(e) => setSignupPassword(e.target.value)}
-                  placeholder="Min 6 characters"
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Student Specific Fields */}
-            {role === 'STUDENT' && (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">College / University</label>
-                    <input
-                      type="text"
-                      value={collegeName}
-                      onChange={(e) => setCollegeName(e.target.value)}
-                      placeholder="Institute of Engineering and Management"
-                      className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">Academic Year</label>
-                    <select
-                      value={year}
-                      onChange={(e) => setYear(e.target.value)}
-                      className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
-                    >
-                      <option>Freshman (Year 1)</option>
-                      <option>Sophomore (Year 2)</option>
-                      <option>Junior (Year 3)</option>
-                      <option>Senior (Year 4)</option>
-                      <option>Master's / Ph.D.</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">Major / Branch</label>
-                    <input
-                      type="text"
-                      value={major}
-                      onChange={(e) => setMajor(e.target.value)}
-                      placeholder="Computer Science"
-                      className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">Current CGPA (out of 10.0)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="10"
-                      value={gpa}
-                      onChange={(e) => setGpa(e.target.value)}
-                      placeholder="8.85"
-                      className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Alumni Specific Fields */}
-            {role === 'ALUMNI' && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Current Company</label>
-                  <input
-                    type="text"
-                    value={company}
-                    onChange={(e) => setCompany(e.target.value)}
-                    placeholder="e.g. Google, Microsoft"
-                    className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Job Title</label>
-                  <input
-                    type="text"
-                    value={roleTitle}
-                    onChange={(e) => setRoleTitle(e.target.value)}
-                    placeholder="Staff Software Engineer"
-                    className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Recruiter Specific Fields */}
-            {role === 'RECRUITER' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Hiring Organization</label>
-                <input
-                  type="text"
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                  placeholder="e.g. Meta, Amazon, Stripe"
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
-                />
-              </div>
-            )}
-
-            {/* Skills & Bio */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Key Skills (Comma separated)</label>
-              <input
-                type="text"
-                value={skills}
-                onChange={(e) => setSkills(e.target.value)}
-                placeholder="React, Python, Machine Learning, Tailwind"
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
-              />
-            </div>
-
+            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 py-3 text-xs font-bold text-white shadow-lg shadow-blue-500/25 transition-all hover:brightness-110 disabled:opacity-50"
+              className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-3 text-xs font-bold text-white shadow-lg shadow-blue-500/25 hover:brightness-110 disabled:opacity-50 transition-all mt-4"
             >
-              {loading ? 'Creating Profile...' : 'Complete Registration'}
+              {loading ? 'Creating Canonical Student Account & Embedding...' : 'Complete Student Registration'}
             </button>
           </form>
         )}

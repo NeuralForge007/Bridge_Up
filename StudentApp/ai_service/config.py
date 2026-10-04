@@ -7,21 +7,20 @@ load_dotenv(BASE_DIR / ".env")
 load_dotenv(BASE_DIR.parent / "backend" / ".env")
 load_dotenv(BASE_DIR.parent / ".env")
 
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://qcgekkenmgycmnhraxia.supabase.co")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv(
-    "SUPABASE_SERVICE_ROLE_KEY",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFjZ2Vra2VubWd5Y21uaHJheGlhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDUwNDM3MSwiZXhwIjoyMTA2MDgwMzcxfQ.FR_k8rI75g3twaLNqQIT51_AHPspd_l--BIVRycen_M"
-)
-SUPABASE_ANON_KEY = os.getenv(
-    "SUPABASE_ANON_KEY",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFjZ2Vra2VubWd5Y21uaHJheGlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA1MDQzNzEsImV4cCI6MjEwNjA4MDM3MX0.8XsGzesadLI_-WXSK6_Xfl9wJ97CPB1QMDaPSq7jWvU"
-)
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 
 AI_SERVICE_HOST = os.getenv("AI_SERVICE_HOST", "0.0.0.0")
 AI_SERVICE_PORT = int(os.getenv("AI_SERVICE_PORT", "8001"))
 
-EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-EMBEDDING_DIM = 384
+EMBEDDING_MODEL_NAME = os.getenv("SBERT_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
+EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "384"))
+
+# Configure Sentence-Transformers cache dir if set
+SENTENCE_TRANSFORMERS_HOME = os.getenv("SENTENCE_TRANSFORMERS_HOME")
+if SENTENCE_TRANSFORMERS_HOME:
+    os.environ["SENTENCE_TRANSFORMERS_HOME"] = SENTENCE_TRANSFORMERS_HOME
 
 # Centralized Scoring Weights (Normalized to 100%)
 DEFAULT_WEIGHTS = {
@@ -36,3 +35,14 @@ DEFAULT_WEIGHTS = {
 }
 
 CSV_DATASET_PATH = BASE_DIR.parent / "backend" / "bridgeup_kolkata_alumni_dataset.csv"
+
+def get_safe_config_summary() -> dict:
+    """Return safe configuration info without exposing secret keys."""
+    return {
+        "service_host": AI_SERVICE_HOST,
+        "service_port": AI_SERVICE_PORT,
+        "embedding_model": EMBEDDING_MODEL_NAME,
+        "embedding_dim": EMBEDDING_DIM,
+        "supabase_configured": bool(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY),
+        "dataset_path_exists": CSV_DATASET_PATH.exists()
+    }

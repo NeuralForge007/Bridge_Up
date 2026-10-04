@@ -8,81 +8,105 @@ const AIMentorFinderPage = () => {
   // Search & Match Parameters
   const [goal, setGoal] = useState('I want to become an AI Researcher at Google');
   const [domain, setDomain] = useState('AI/ML');
-  const [path, setPath] = useState('AI / ML Researcher');
   const [skills, setSkills] = useState(currentUser?.skills?.join(', ') || 'Python, PyTorch, Deep Learning, NLP');
-  const [collegeId, setCollegeId] = useState('');
 
   // Results & State
   const [matches, setMatches] = useState([]);
   const [exactMatchFound, setExactMatchFound] = useState(true);
+  const [studentCollege, setStudentCollege] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [errorInfo, setErrorInfo] = useState(null); // { code, message, retryable }
   const [selectedMentor, setSelectedMentor] = useState(null);
   const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [requestNote, setRequestNote] = useState('');
   const [requestSuccess, setRequestSuccess] = useState('');
 
+  const collegeDisplayName = currentUser?.college_name || studentCollege?.name || 'Institute of Engineering and Management';
+
   const handleAIMatch = async (e) => {
     if (e) e.preventDefault();
+    if (loading) return;
+
     setLoading(true);
+    setErrorInfo(null);
     setRequestSuccess('');
+
+    const controller = new AbortController();
+
     try {
+      const skillsArray = skills ? skills.split(',').map(s => s.trim()).filter(Boolean) : [];
       const response = await apiService.aiMatchMentors({
-        goal,
         career_goal: goal,
-        domain,
+        goal,
         career_domain: domain,
-        path,
-        skills: skills.split(',').map(s => s.trim()).filter(Boolean),
-        collegeId: collegeId || undefined,
-        college_id: collegeId || undefined,
+        domain,
+        skills: skillsArray,
+        student_id: currentUser?.student_id || currentUser?.id,
+        college_id: currentUser?.college_id,
         limit: 8
-      });
+      }, controller.signal);
       
-      const resultsList = Array.isArray(response) ? response : (response?.matches || response?.mentors || []);
-      setMatches(resultsList);
-      if (response && response.exact_match_found !== undefined) {
-        setExactMatchFound(response.exact_match_found);
+      if (response && response.success) {
+        const resultsList = response.matches || [];
+        setMatches(resultsList);
+        setExactMatchFound(Boolean(response.exact_match_found));
+        if (response.student_college) {
+          setStudentCollege(response.student_college);
+        }
+        setHasSearched(true);
       } else {
-        setExactMatchFound(resultsList.some(m => (m.matchType || m.match_type) === 'EXACT'));
+        setErrorInfo({
+          code: response?.code || 'NO_MATCHES',
+          message: response?.message || 'Failed to generate mentor recommendations.',
+          retryable: true
+        });
+        setMatches([]);
       }
     } catch (err) {
-      console.error('AI match failed:', err);
+      if (err.code === 'CANCELLED') return;
+      console.error('AI mentor match failed:', err);
+      
+      let code = err.code || 'AI_SERVICE_UNAVAILABLE';
+      let msg = err.message || 'The AI Alumni Mentor Matcher service (Sentence-BERT) is currently starting up or unavailable.';
+      
+      if (code === 'AI_SERVICE_WARMING' || msg.includes('loading') || msg.includes('preparing')) {
+        code = 'AI_SERVICE_WARMING';
+        msg = 'Recommendation model is preparing. Try again in a few moments.';
+      }
+
+      setErrorInfo({
+        code,
+        message: msg,
+        retryable: err.retryable !== false
+      });
+      setMatches([]);
     } finally {
       setLoading(false);
     }
   };
 
+  // Sync skills when currentUser changes without firing unrequested AI API requests
   useEffect(() => {
-    handleAIMatch();
-  }, []);
+    if (currentUser?.skills && currentUser.skills.length > 0) {
+      setSkills(currentUser.skills.join(', '));
+    }
+  }, [currentUser]);
 
   const handleOpenRequest = (mentor) => {
     setSelectedMentor(mentor);
-    setRequestNote(`Hi ${mentor.name}, I am deeply inspired by your career journey at ${mentor.company}. I'd love your mentorship on ${domain} and portfolio review!`);
+    setRequestNote(`Hi ${mentor.name}, I am a student at ${collegeDisplayName}. I am deeply inspired by your journey at ${mentor.company} and would appreciate your mentorship on ${domain}!`);
     setRequestModalOpen(true);
   };
 
   const handleSendRequest = async () => {
     if (!selectedMentor) return;
     try {
-      const userIdentifier = currentUser?.id || currentUser?.user_id || currentUser?.student_id || 'demo-1';
       await apiService.requestMentorship({
-        student_id: userIdentifier,
-        studentId: userIdentifier,
-        studentName: currentUser?.name || currentUser?.displayName || 'Student Mentee',
-        studentEmail: currentUser?.email || 'student@university.edu',
-        studentAvatar: currentUser?.avatar,
-        studentMajor: currentUser?.major || 'Computer Science',
-        studentCollege: currentUser?.college_name || 'Institute of Engineering and Management',
-        studentGpa: currentUser?.gpa || '3.85',
-        studentSkills: currentUser?.skills || ['React', 'Python'],
-        alumniId: selectedMentor.id || selectedMentor.alumni_id || selectedMentor.user_id,
-        alumni_id: selectedMentor.id || selectedMentor.alumni_id || selectedMentor.user_id,
-        mentorName: selectedMentor.name || selectedMentor.full_name,
-        mentorCompany: selectedMentor.company,
-        mentorAvatar: selectedMentor.avatar,
-        goal: goal || 'AI Mentorship Program',
-        note: requestNote
+        alumni_id: selectedMentor.alumni_id || selectedMentor.id,
+        goal: goal || 'Career Mentorship',
+        note: requestNote,
+        ai_match_score: selectedMentor.match_score
       });
       setRequestSuccess(`Mentorship request successfully sent to ${selectedMentor.name}!`);
       setRequestModalOpen(false);
@@ -106,7 +130,7 @@ const AIMentorFinderPage = () => {
             Find Your Career <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-cyan-400 bg-clip-text text-transparent">Alumni Mentor</span>
           </h1>
           <p className="mt-2 text-sm text-slate-300 leading-relaxed">
-            Our 2-Stage Hybrid Re-ranking Engine combines 384-dimensional Sentence-BERT semantic embeddings with structured role families, company alignment, and skill compatibility across 300+ verified alumni.
+            Personalized alumni recommendations from your verified college network: <span className="font-bold text-blue-300">{collegeDisplayName}</span>. Matches are powered by 384-dimensional Sentence-BERT embeddings, pgvector retrieval, and adaptive multi-factor reranking.
           </p>
         </div>
       </div>
@@ -124,34 +148,46 @@ const AIMentorFinderPage = () => {
         </div>
       )}
 
+      {/* Error / Service Notice Banner with Retry Action */}
+      {errorInfo && (
+        <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs font-semibold text-rose-300 flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <span className="text-base">{errorInfo.code === 'AI_SERVICE_WARMING' ? '⏳' : '⚠️'}</span>
+            <div>
+              <p className="font-bold">
+                {errorInfo.code === 'AI_SERVICE_WARMING' ? 'Model Initializing' : 'Recommendation Service Notice'}
+              </p>
+              <p className="mt-0.5 text-rose-200/90">{errorInfo.message}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {errorInfo.retryable && (
+              <button
+                onClick={handleAIMatch}
+                disabled={loading}
+                className="rounded-lg bg-rose-500/20 px-3 py-1.5 text-[11px] font-bold text-rose-200 border border-rose-500/40 hover:bg-rose-500/30 transition-all"
+              >
+                {loading ? 'Retrying...' : 'Retry Search 🔄'}
+              </button>
+            )}
+            <button onClick={() => setErrorInfo(null)} className="text-rose-300 hover:text-white ml-1">✕</button>
+          </div>
+        </div>
+      )}
+
       {/* AI Search & Filter Bar */}
       <form onSubmit={handleAIMatch} className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 sm:p-6 shadow-xl backdrop-blur-xl">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           
           <div className="lg:col-span-2">
-            <label className="block text-xs font-bold text-slate-300 mb-1.5">🎯 Desired Career Goal / Destination</label>
+            <label className="block text-xs font-bold text-slate-300 mb-1.5">🎯 Desired Career Goal / Target Role & Company</label>
             <input
               type="text"
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
-              placeholder="e.g. I want to become an AI Researcher at Google or join DRDO as Cybersecurity Analyst"
+              placeholder="e.g. I want to become an AI Researcher at Google"
               className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
             />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-300 mb-1.5">🏫 College Network (Hard Filter)</label>
-            <select
-              value={collegeId || (currentUser?.college_id || 1)}
-              onChange={(e) => setCollegeId(e.target.value)}
-              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-xs text-white focus:border-blue-500 focus:outline-none"
-            >
-              <option value="1">Institute of Engineering and Management (IEM)</option>
-              <option value="2">Jadavpur University (JU)</option>
-              <option value="3">University of Calcutta (CU)</option>
-              <option value="4">IIT Kharagpur (IIT KGP)</option>
-              <option value="5">NIT Durgapur (NIT DGP)</option>
-            </select>
           </div>
 
           <div>
@@ -172,27 +208,19 @@ const AIMentorFinderPage = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-300 mb-1.5">🛣️ Career Pathway</label>
-            <select
-              value={path}
-              onChange={(e) => setPath(e.target.value)}
-              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-xs text-white focus:border-blue-500 focus:outline-none"
-            >
-              <option value="AI / ML Researcher">AI / ML Researcher</option>
-              <option value="FAANG / Big Tech SDE">FAANG / Big Tech SDE</option>
-              <option value="Cybersecurity Specialist">Cybersecurity Specialist</option>
-              <option value="Space & Defence Research">Space & Defence Research</option>
-              <option value="Product Leader">Product Leader</option>
-            </select>
+            <label className="block text-xs font-bold text-slate-300 mb-1.5">🏫 College Network (Hard Filter)</label>
+            <div className="w-full rounded-xl border border-blue-500/30 bg-blue-950/40 px-4 py-2.5 text-xs font-semibold text-blue-300 truncate">
+              🎓 {collegeDisplayName}
+            </div>
           </div>
 
-          <div>
+          <div className="lg:col-span-3">
             <label className="block text-xs font-bold text-slate-300 mb-1.5">⚡ Your Current Skills (Comma-separated)</label>
             <input
               type="text"
               value={skills}
               onChange={(e) => setSkills(e.target.value)}
-              placeholder="Python, PyTorch, Deep Learning, NLP"
+              placeholder="Python, PyTorch, Deep Learning, SQL"
               className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-xs text-white focus:border-blue-500 focus:outline-none"
             />
           </div>
@@ -210,7 +238,7 @@ const AIMentorFinderPage = () => {
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  <span>Find Best Matched Mentors</span>
+                  <span>Find Best Mentors</span>
                 </>
               )}
             </button>
@@ -219,13 +247,13 @@ const AIMentorFinderPage = () => {
         </div>
       </form>
 
-      {/* Fallback Notice if no Exact Match Found */}
+      {/* Notice if no Exact Match Found */}
       {!exactMatchFound && matches.length > 0 && (
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-300 flex items-start gap-3">
           <span className="text-base">ℹ️</span>
           <div>
-            <p className="font-bold">No exact verified alumni found for: "{goal}"</p>
-            <p className="text-amber-200/80 mt-0.5">Showing closest career matches and relevant mentors from your college network below:</p>
+            <p className="font-bold">No exact verified alumni match found for: "{goal}"</p>
+            <p className="text-amber-200/80 mt-0.5">Showing closest career matches and strong alumni mentors from your college network (<span className="font-semibold">{collegeDisplayName}</span>) below:</p>
           </div>
         </div>
       )}
@@ -234,133 +262,146 @@ const AIMentorFinderPage = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h3 className="text-base font-black text-white">Top Recommended Mentors</h3>
-            <span className="rounded-full bg-blue-500/10 px-2.5 py-0.5 text-xs font-bold text-blue-400 border border-blue-500/20">
-              {matches.length} matches found
-            </span>
+            <h3 className="text-base font-black text-white">Recommended Alumni Mentors</h3>
+            {matches.length > 0 && (
+              <span className="rounded-full bg-blue-500/10 px-2.5 py-0.5 text-xs font-bold text-blue-400 border border-blue-500/20">
+                {matches.length} same-college alumni
+              </span>
+            )}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {matches.map((m) => {
-            const score = m.match_score || m.matchScore || 85;
-            const matchType = (m.match_type || m.matchType || (score >= 85 ? 'EXACT' : score >= 70 ? 'STRONG' : 'RELATED')).toUpperCase();
-            
-            const badgeStyles = matchType === 'EXACT' 
-              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' 
-              : matchType === 'STRONG'
-              ? 'bg-blue-500/15 border-blue-500/30 text-blue-400'
-              : 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300';
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6 animate-pulse space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-14 w-14 rounded-2xl bg-slate-800" />
+                  <div className="space-y-2 flex-1">
+                    <div className="h-4 w-32 bg-slate-800 rounded" />
+                    <div className="h-3 w-48 bg-slate-800/60 rounded" />
+                  </div>
+                </div>
+                <div className="h-12 bg-slate-800/40 rounded-xl" />
+              </div>
+            ))}
+          </div>
+        ) : matches.length === 0 ? (
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/40 p-12 text-center">
+            {hasSearched ? (
+              <>
+                <p className="text-sm font-semibold text-slate-300">No alumni mentors found for this search.</p>
+                <p className="text-xs text-slate-500 mt-1">Try expanding your target skills or exploring different career domains.</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-slate-300">Ready to discover alumni mentors.</p>
+                <p className="text-xs text-slate-500 mt-1">Click <span className="text-blue-400 font-semibold">"Find Best Mentors"</span> above to generate real-time Sentence-BERT recommendations from <span className="text-slate-300">{collegeDisplayName}</span>.</p>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {matches.map((m) => {
+              const score = typeof m.match_score === 'number' ? m.match_score.toFixed(1) : m.match_score;
+              const matchType = (m.match_type || 'STRONG').toUpperCase();
+              
+              const badgeStyles = matchType === 'EXACT' 
+                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' 
+                : matchType === 'STRONG'
+                ? 'bg-blue-500/15 border-blue-500/30 text-blue-400'
+                : 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300';
 
-            const badgeLabel = matchType === 'EXACT' ? '🎯 Exact Career Match' : matchType === 'STRONG' ? '⚡ Strong Match' : '🔍 Related Match';
+              const badgeLabel = matchType === 'EXACT' ? '🎯 Exact Career Match' : matchType === 'STRONG' ? '⚡ Strong Match' : '🔍 Related Match';
 
-            return (
-              <div
-                key={m.id || m.alumni_id}
-                className="group relative rounded-3xl border border-slate-800 bg-slate-900/60 p-6 shadow-xl transition-all hover:border-blue-500/40 hover:bg-slate-900/90 hover:shadow-2xl flex flex-col justify-between"
-              >
-                <div>
-                  {/* Top Row: Avatar, Info & Match Score Badge */}
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-3.5">
-                      <img
-                        src={m.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${m.alumni_id || 'Mentor'}&mouth=smile&eyes=default&clothing=blazerAndShirt&backgroundColor=c0aede`}
-                        alt={m.name}
-                        className="h-14 w-14 rounded-2xl border border-slate-700 bg-slate-800 shrink-0"
-                      />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-base font-bold text-white group-hover:text-blue-400 transition-colors">{m.name}</h4>
-                          <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-400 border border-blue-500/20">
-                            {m.company || 'Tech Leader'}
-                          </span>
+              return (
+                <div
+                  key={m.alumni_id || m.id}
+                  className="group relative rounded-3xl border border-slate-800 bg-slate-900/60 p-6 shadow-xl transition-all hover:border-blue-500/40 hover:bg-slate-900/90 hover:shadow-2xl flex flex-col justify-between"
+                >
+                  <div>
+                    {/* Top Row: Avatar, Info & Match Score Badge */}
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-3.5">
+                        <img
+                          src={m.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${m.alumni_id}&mouth=smile&eyes=default&clothing=blazerAndShirt&backgroundColor=c0aede`}
+                          alt={m.name}
+                          className="h-14 w-14 rounded-2xl border border-slate-700 bg-slate-800 shrink-0"
+                        />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-base font-bold text-white group-hover:text-blue-400 transition-colors">{m.name}</h4>
+                            <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-400 border border-blue-500/20">
+                              {m.company}
+                            </span>
+                          </div>
+                          <p className="text-xs font-medium text-slate-300 mt-0.5">{m.current_role}</p>
+                          <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                            <span>🎓 {m.college_name}</span>
+                            {m.graduation_year && <span>• Class of {m.graduation_year}</span>}
+                            {m.experience_years !== undefined && <span>• {m.experience_years} yrs exp</span>}
+                          </p>
                         </div>
-                        <p className="text-xs font-medium text-slate-300 mt-0.5">{m.current_role || m.role_title || 'Senior Engineer'}</p>
-                        <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
-                          <span>🎓 {m.college_name || 'Alumni Network'}</span>
-                          {m.graduation_year && <span>• Class of {m.graduation_year}</span>}
-                          {m.experience_years !== undefined && <span>• {m.experience_years} yrs exp</span>}
-                        </p>
+                      </div>
+
+                      {/* AI Score & Match Type Badge */}
+                      <div className="text-right shrink-0">
+                        <span className={`inline-block rounded-lg border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider mb-1 ${badgeStyles}`}>
+                          {badgeLabel}
+                        </span>
+                        <p className="text-xl font-black text-white leading-none">{score}%</p>
                       </div>
                     </div>
 
-                    {/* AI Score & Match Type Badge */}
-                    <div className="text-right shrink-0">
-                      <span className={`inline-block rounded-lg border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider mb-1 ${badgeStyles}`}>
-                        {badgeLabel}
-                      </span>
-                      <p className="text-xl font-black text-white leading-none">{score}%</p>
-                    </div>
-                  </div>
-
-                  {/* Career Trajectory Path */}
-                  {m.career_path && (
-                    <div className="mt-3 rounded-xl bg-slate-950/70 border border-slate-800/80 px-3 py-1.5 text-[11px] text-slate-300 flex items-center gap-1.5">
-                      <span className="text-blue-400 font-bold shrink-0">🛣️ Trajectory:</span>
-                      <span className="truncate">{m.career_path}</span>
-                    </div>
-                  )}
-
-                  {/* Explainable Match Reasons */}
-                  <div className="mt-3.5 rounded-2xl border border-blue-500/15 bg-blue-950/20 p-3.5 text-xs text-slate-300">
-                    <div className="flex items-center gap-1.5 font-bold text-blue-400 text-[11px] mb-1.5">
-                      <span>✨ Match Rationale:</span>
-                    </div>
-                    {m.reasons && m.reasons.length > 0 ? (
+                    {/* Explainable Match Reasons */}
+                    <div className="mt-3.5 rounded-2xl border border-blue-500/15 bg-blue-950/20 p-3.5 text-xs text-slate-300">
+                      <div className="flex items-center gap-1.5 font-bold text-blue-400 text-[11px] mb-1.5">
+                        <span>✨ Match Rationale:</span>
+                      </div>
                       <ul className="space-y-1 text-[11px] text-slate-300">
-                        {m.reasons.map((r, rIdx) => (
-                          <li key={rIdx} className="leading-tight flex items-start gap-1">
+                        {(m.reasons || []).map((r, rIdx) => (
+                          <li key={rIdx} className="leading-tight flex items-start gap-1.5">
+                            <span className="text-blue-400">✓</span>
                             <span>{r}</span>
                           </li>
                         ))}
                       </ul>
-                    ) : (
-                      <p className="leading-relaxed text-slate-300 text-[11px]">
-                        {m.matchRationale || `${m.name} has proven industry expertise in ${m.career_domain}.`}
-                      </p>
-                    )}
-                  </div>
+                    </div>
 
-                  {/* Skills Cloud */}
-                  <div className="mt-3.5 flex flex-wrap gap-1.5">
-                    {(m.skills || []).slice(0, 6).map((skill, sIdx) => {
-                      const isMatched = (m.matched_skills || []).some(ms => ms.toLowerCase() === skill.toLowerCase());
-                      return (
+                    {/* Skills Cloud */}
+                    <div className="mt-3.5 flex flex-wrap gap-1.5">
+                      {(m.matched_skills || []).map((skill, sIdx) => (
                         <span
                           key={sIdx}
-                          className={`rounded-lg px-2 py-0.5 text-[10px] font-medium border ${
-                            isMatched
-                              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 font-semibold'
-                              : 'bg-slate-800/80 border-slate-700/60 text-slate-300'
-                          }`}
+                          className="rounded-lg px-2 py-0.5 text-[10px] font-semibold border bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
                         >
-                          {skill} {isMatched && '✓'}
+                          {skill} ✓
                         </span>
-                      );
-                    })}
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                {/* Bottom Actions */}
-                <div className="mt-5 flex items-center justify-between border-t border-slate-800/80 pt-4">
-                  <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                    <span>{m.availability || 'Available'}</span>
-                    <span className="text-slate-600">•</span>
-                    <span>⭐ {m.mentor_rating || m.rating || 4.8}/5.0</span>
+                  {/* Bottom Actions */}
+                  <div className="mt-5 flex items-center justify-between border-t border-slate-800/80 pt-4">
+                    <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                      <span>{m.availability || 'Available'}</span>
+                      <span className="text-slate-600">•</span>
+                      <span>⭐ {m.mentor_rating || 4.8}/5.0</span>
+                    </div>
+                    
+                    <button
+                      onClick={() => handleOpenRequest(m)}
+                      className="rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-4 py-2 text-xs font-bold text-white shadow-md shadow-blue-500/20 hover:brightness-110 transition-all"
+                    >
+                      Request Mentorship ⚡
+                    </button>
                   </div>
-                  
-                  <button
-                    onClick={() => handleOpenRequest(m)}
-                    className="rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-4 py-2 text-xs font-bold text-white shadow-md shadow-blue-500/20 hover:brightness-110 transition-all"
-                  >
-                    Request Mentorship ⚡
-                  </button>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Mentorship Request Modal */}
@@ -371,7 +412,7 @@ const AIMentorFinderPage = () => {
               Request Mentorship from <span className="text-blue-400">{selectedMentor.name}</span>
             </h3>
             <p className="text-xs text-slate-400 mt-1">
-              {selectedMentor.current_role || selectedMentor.role_title} @ {selectedMentor.company}
+              {selectedMentor.current_role} @ {selectedMentor.company} ({selectedMentor.college_name})
             </p>
 
             <div className="mt-4">
@@ -382,7 +423,7 @@ const AIMentorFinderPage = () => {
                 rows={4}
                 value={requestNote}
                 onChange={(e) => setRequestNote(e.target.value)}
-                placeholder="Share your goals, what you are looking to learn, and specific questions..."
+                placeholder="Share your goals, questions about target roles/companies, and discussion topics..."
                 className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-white focus:border-blue-500 focus:outline-none"
               />
             </div>

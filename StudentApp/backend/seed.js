@@ -117,9 +117,29 @@ export async function runSeeder() {
       email: String(u.email).toLowerCase().trim(),
       password_hash,
       role: u.role || 'STUDENT',
+      name: u.display_name || u.email.split('@')[0],
       display_name: u.display_name || u.email.split('@')[0],
       verification_status: u.verification_status || 'Verified',
       avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.display_name || u.email)}&mouth=smile&eyes=default&clothing=collarAndSweater&backgroundColor=b6e3f4`
+    });
+  }
+
+  // Also seed frontend demo users (Alex Rivera, Anirban Sharma, etc.)
+  const { INITIAL_DEMO_USERS } = await import('./demo_users_data.js');
+  for (const du of INITIAL_DEMO_USERS) {
+    const pass = 'password123';
+    const password_hash = bcrypt.hashSync(pass, 8);
+    usersList.push({
+      id: String(du.user_id || du.id),
+      email: String(du.email).toLowerCase().trim(),
+      password_hash,
+      role: du.role || 'STUDENT',
+      name: du.name || du.display_name,
+      display_name: du.name || du.display_name,
+      verification_status: du.verification_status || 'Verified',
+      college_id: du.college_id || 1,
+      college_name: du.college_name || 'Institute of Engineering and Management',
+      avatar: du.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(du.name || du.email)}&mouth=smile&eyes=default&clothing=collarAndSweater&backgroundColor=b6e3f4`
     });
   }
 

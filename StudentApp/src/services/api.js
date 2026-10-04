@@ -1,4 +1,20 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+export const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL;
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return `http://${window.location.hostname}:5001/api`;
+  }
+  return 'http://localhost:5001/api';
+};
+
+export const API_BASE_URL = getApiBaseUrl();
+
+export const TIMEOUTS = {
+  health: 2000,
+  auth: 10000,
+  ai: 15000,
+  default: 10000
+};
 
 const getHeaders = (includeAuth = true) => {
   const headers = { 'Content-Type': 'application/json' };
@@ -11,46 +27,139 @@ const getHeaders = (includeAuth = true) => {
   return headers;
 };
 
+/**
+ * Shared Request Helper with AbortController, Timeout, and Structured Error Handling
+ */
+async function request(endpoint, options = {}) {
+  const {
+    timeout = TIMEOUTS.default,
+    includeAuth = true,
+    signal: externalSignal,
+    ...fetchOptions
+  } = options;
+
+  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+  
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(fetchOptions.headers || {})
+  };
+
+  if (includeAuth) {
+    const token = localStorage.getItem('nextstep_token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      externalSignal.addEventListener('abort', () => controller.abort());
+    }
+  }
+
+  try {
+    const res = await fetch(url, {
+      ...fetchOptions,
+      headers,
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    let data;
+    const contentType = res.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      data = await res.json();
+    } else {
+      const text = await res.text();
+      data = { message: text };
+    }
+
+    if (!res.ok) {
+      const errorMsg = data.message || data.error || `HTTP ${res.status}: ${res.statusText}`;
+      const err = new Error(errorMsg);
+      err.status = res.status;
+      err.code = data.code || (res.status === 503 ? 'AI_SERVICE_WARMING' : 'HTTP_ERROR');
+      err.data = data;
+      err.retryable = Boolean(data.retryable || res.status >= 500 || res.status === 429);
+      throw err;
+    }
+
+    return data;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      if (externalSignal?.aborted) {
+        const cancelErr = new Error('Request cancelled');
+        cancelErr.code = 'CANCELLED';
+        throw cancelErr;
+      }
+      const timeoutErr = new Error(`Request timed out after ${timeout / 1000}s`);
+      timeoutErr.code = 'TIMEOUT';
+      timeoutErr.retryable = true;
+      throw timeoutErr;
+    }
+    throw err;
+  }
+}
+
 export const apiService = {
   // ──────────────── Auth & Demo Users ────────────────
-  async getDemoUsers() {
+  async getDemoUsers(signal) {
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/demo-users`);
-      if (!res.ok) return [];
-      const data = await res.json();
+      const data = await request('/auth/demo-users', { includeAuth: false, timeout: TIMEOUTS.auth, signal });
       return data.users || [];
     } catch (err) {
-      console.warn('API getDemoUsers error:', err.message);
+      if (err.code !== 'CANCELLED') console.warn('API getDemoUsers notice:', err.message);
       return [];
     }
   },
 
   async register(userData) {
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/register`, {
-        method: 'POST',
-        headers: getHeaders(false),
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
         body: JSON.stringify(userData)
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Registration failed');
-      if (data.token) localStorage.setItem('nextstep_token', data.token);
-      return data;
-    } catch (err) {
-      console.warn('API register error:', err.message);
-      throw err;
+
+      const contentType = response.headers.get("content-type");
+      const result = contentType?.includes("application/json")
+        ? await response.json()
+        : { message: await response.text() };
+
+      if (!response.ok) {
+        throw new Error(result.error || result.message || `Registration failed (${response.status})`);
+      }
+
+      if (result.token) localStorage.setItem('nextstep_token', result.token);
+      return result;
+    } catch (error) {
+      if (error instanceof TypeError) {
+        throw new Error(
+          "Cannot reach the BridgeUp server. Please verify the backend and API configuration."
+        );
+      }
+      throw error;
     }
   },
 
   async login(email, password) {
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/login`, {
+      const data = await request('/auth/login', {
         method: 'POST',
-        headers: getHeaders(false),
+        includeAuth: false,
+        timeout: TIMEOUTS.auth,
         body: JSON.stringify({ email, password })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Login failed');
       if (data.token) localStorage.setItem('nextstep_token', data.token);
       return data;
     } catch (err) {
@@ -59,13 +168,44 @@ export const apiService = {
     }
   },
 
+  async demoLogin(demoUserOrIdentifier) {
+    try {
+      const payload = typeof demoUserOrIdentifier === 'string'
+        ? { email: demoUserOrIdentifier }
+        : {
+            email: demoUserOrIdentifier?.email,
+            id: demoUserOrIdentifier?.id || demoUserOrIdentifier?.user_id,
+            role: demoUserOrIdentifier?.role
+          };
+
+      const data = await request('/auth/demo-login', {
+        method: 'POST',
+        includeAuth: false,
+        timeout: TIMEOUTS.auth,
+        body: JSON.stringify(payload)
+      });
+      if (data?.token) {
+        localStorage.setItem('nextstep_token', data.token);
+      }
+      return data;
+    } catch (err) {
+      console.warn('API demoLogin error, trying fallback login:', err.message);
+      const email = typeof demoUserOrIdentifier === 'string' ? demoUserOrIdentifier : demoUserOrIdentifier?.email;
+      if (email) {
+        return await this.login(email, 'password123');
+      }
+      throw err;
+    }
+  },
+
   async logout(userId, email) {
     try {
       localStorage.removeItem('nextstep_token');
       localStorage.removeItem('nextstep_user');
-      await fetch(`${API_BASE_URL}/auth/logout`, {
+      await request('/auth/logout', {
         method: 'POST',
-        headers: getHeaders(false),
+        includeAuth: false,
+        timeout: TIMEOUTS.health,
         body: JSON.stringify({ userId, email })
       });
     } catch (err) {
@@ -73,13 +213,9 @@ export const apiService = {
     }
   },
 
-  async getMe() {
+  async getMe(signal) {
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/me`, {
-        headers: getHeaders()
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
+      const data = await request('/auth/me', { timeout: TIMEOUTS.auth, signal });
       return data.user || null;
     } catch (err) {
       return null;
@@ -88,12 +224,11 @@ export const apiService = {
 
   async updateProfile(userId, updates) {
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/profile`, {
+      const data = await request('/auth/profile', {
         method: 'PATCH',
-        headers: getHeaders(),
+        timeout: TIMEOUTS.auth,
         body: JSON.stringify({ userId, ...updates })
       });
-      const data = await res.json();
       return data.user || null;
     } catch (err) {
       console.warn('API profile update error:', err.message);
@@ -102,34 +237,32 @@ export const apiService = {
   },
 
   // ──────────────── AI Mentor Matcher & Mentorships ────────────────
-  async aiMatchMentors(criteria) {
+  async aiMatchMentors(criteria, signal) {
     try {
-      const res = await fetch(`${API_BASE_URL}/mentors/ai/match`, {
+      const data = await request('/mentors/ai/match', {
         method: 'POST',
-        headers: getHeaders(),
+        timeout: TIMEOUTS.ai,
+        signal,
         body: JSON.stringify(criteria)
       });
-      const data = await res.json();
-      return data.matches || [];
+      return data;
     } catch (err) {
-      console.warn('API aiMatchMentors error:', err.message);
-      return [];
+      if (err.code !== 'CANCELLED') console.warn('API aiMatchMentors error:', err.message);
+      throw err;
     }
   },
 
-  async getMentors(filters = {}) {
+  async getMentors(filters = {}, signal) {
     try {
       const params = new URLSearchParams();
       if (filters.company) params.append('company', filters.company);
       if (filters.search) params.append('search', filters.search);
       if (filters.domain) params.append('domain', filters.domain);
 
-      const res = await fetch(`${API_BASE_URL}/mentors?${params.toString()}`);
-      if (!res.ok) throw new Error('Failed to fetch mentors');
-      const data = await res.json();
+      const data = await request(`/mentors?${params.toString()}`, { timeout: TIMEOUTS.default, signal });
       return data.mentors || [];
     } catch (err) {
-      console.warn('API getMentors error:', err.message);
+      if (err.code !== 'CANCELLED') console.warn('API getMentors error:', err.message);
       return [];
     }
   },
@@ -448,7 +581,7 @@ export const apiService = {
     }
   },
 
-  // ──────────────── Hackathons & Partner Matching ────────────────
+  // ──────────────── Hackathons & Teammate Recommender ────────────────
   async getHackathons(filters = {}) {
     try {
       const params = new URLSearchParams();
@@ -487,9 +620,79 @@ export const apiService = {
     }
   },
 
-  async getHackathonPartners(id) {
+  async postTeamRequirement(hackathonId, requirementData) {
     try {
-      const res = await fetch(`${API_BASE_URL}/hackathons/${id}/partners`);
+      const res = await fetch(`${API_BASE_URL}/hackathons/${hackathonId}/team-requirements`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(requirementData)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to post requirement');
+      return data;
+    } catch (err) {
+      console.warn('API postTeamRequirement error:', err.message);
+      throw err;
+    }
+  },
+
+  async getTeamRequirements(hackathonId) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/hackathons/${hackathonId}/team-requirements`);
+      const data = await res.json();
+      return data.requirements || [];
+    } catch (err) {
+      return [];
+    }
+  },
+
+  async getMyTeamRequirements(hackathonId) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/hackathons/${hackathonId}/team-requirements/mine`, {
+        headers: getHeaders()
+      });
+      const data = await res.json();
+      return data.requirements || [];
+    } catch (err) {
+      return [];
+    }
+  },
+
+  async getTeammateRecommendations(hackathonId, requirementId) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/hackathons/${hackathonId}/team-requirements/${requirementId}/recommendations`, {
+        headers: getHeaders()
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to get recommendations');
+      return data;
+    } catch (err) {
+      console.warn('API getTeammateRecommendations error:', err.message);
+      throw err;
+    }
+  },
+
+  async sendTeamJoinRequest(hackathonId, requirementId, requestData) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/hackathons/${hackathonId}/team-requirements/${requirementId}/join-requests`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(requestData)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send join request');
+      return data;
+    } catch (err) {
+      console.warn('API sendTeamJoinRequest error:', err.message);
+      throw err;
+    }
+  },
+
+  async getIncomingTeamJoinRequests() {
+    try {
+      const res = await fetch(`${API_BASE_URL}/team-join-requests/incoming`, {
+        headers: getHeaders()
+      });
       const data = await res.json();
       return data.requests || [];
     } catch (err) {
@@ -497,17 +700,66 @@ export const apiService = {
     }
   },
 
-  async postHackathonPartnerRequest(id, data) {
+  async getOutgoingTeamJoinRequests() {
     try {
-      const res = await fetch(`${API_BASE_URL}/hackathons/${id}/partners`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify(data)
+      const res = await fetch(`${API_BASE_URL}/team-join-requests/outgoing`, {
+        headers: getHeaders()
       });
-      return await res.json();
+      const data = await res.json();
+      return data.requests || [];
     } catch (err) {
-      return null;
+      return [];
     }
+  },
+
+  async acceptTeamJoinRequest(requestId) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/team-join-requests/${requestId}/accept`, {
+        method: 'PATCH',
+        headers: getHeaders()
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to accept join request');
+      return data;
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  async rejectTeamJoinRequest(requestId) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/team-join-requests/${requestId}/reject`, {
+        method: 'PATCH',
+        headers: getHeaders()
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reject join request');
+      return data;
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  async withdrawTeamJoinRequest(requestId) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/team-join-requests/${requestId}/withdraw`, {
+        method: 'PATCH',
+        headers: getHeaders()
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to withdraw join request');
+      return data;
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  async getHackathonPartners(id) {
+    return this.getTeamRequirements(id);
+  },
+
+  async postHackathonPartnerRequest(id, data) {
+    return this.postTeamRequirement(id, data);
   },
 
   // ──────────────── Campus & Alumni Events ────────────────
@@ -553,9 +805,12 @@ export const apiService = {
   // ──────────────── Notifications ────────────────
   async getNotifications() {
     try {
+      const token = localStorage.getItem('nextstep_token');
+      if (!token) return [];
       const res = await fetch(`${API_BASE_URL}/notifications`, {
         headers: getHeaders()
       });
+      if (!res.ok) return [];
       const data = await res.json();
       return data.notifications || [];
     } catch (err) {
@@ -565,6 +820,8 @@ export const apiService = {
 
   async markNotificationRead(id) {
     try {
+      const token = localStorage.getItem('nextstep_token');
+      if (!token) return null;
       const res = await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
         method: 'PATCH',
         headers: getHeaders()
@@ -577,6 +834,8 @@ export const apiService = {
 
   async markAllNotificationsRead() {
     try {
+      const token = localStorage.getItem('nextstep_token');
+      if (!token) return null;
       const res = await fetch(`${API_BASE_URL}/notifications/read-all`, {
         method: 'POST',
         headers: getHeaders()

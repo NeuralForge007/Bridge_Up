@@ -33,10 +33,15 @@ import { runSeeder } from './seed.js';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 // Global Middleware
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 app.use(express.json());
 
 // Routes
@@ -55,6 +60,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/referrals', referralRoutes);
 app.use('/api/hackathons', hackathonRoutes);
+app.use('/api/team-join-requests', hackathonRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/notifications', notificationRoutes);
 
@@ -73,19 +79,26 @@ app.get('/', (req, res) => {
   res.send('🚀 BridgeUp Node.js + Express + Supabase API Backend is live and running on Port ' + PORT);
 });
 
-// Start Server & Initialize Dataset Seeding
-app.listen(PORT, async () => {
+// Start Server
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`=================================================`);
   console.log(`🚀 BridgeUp Express Backend Server running!`);
+  console.log(`BridgeUp API running on port ${PORT}`);
   console.log(`📡 URL: http://localhost:${PORT}`);
   console.log(`🗄️  Supabase URL: ${process.env.SUPABASE_URL || 'https://qcgekkenmgycmnhraxia.supabase.co'}`);
+  console.log(`🤖 AI Service URL: ${process.env.AI_SERVICE_URL || 'http://127.0.0.1:8001'}`);
   console.log(`=================================================`);
 
-  // Initialize and seed dataset from Excel and sync to Supabase
-  try {
-    await runSeeder();
-  } catch (err) {
-    console.warn('Seeder notice:', err.message);
+  // Explicit seeding only when RUN_SEED_ON_START=true
+  if (process.env.RUN_SEED_ON_START === 'true') {
+    console.log('🌱 RUN_SEED_ON_START is true. Running dataset seeding...');
+    try {
+      await runSeeder();
+      await seedSupabaseDatabase();
+    } catch (err) {
+      console.warn('Seeder notice:', err.message);
+    }
+  } else {
+    console.log('⚡ Fast startup: Startup database seeding skipped (run "npm run seed" for manual seeding).');
   }
-  await seedSupabaseDatabase();
 });

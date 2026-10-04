@@ -8,7 +8,6 @@ const CollegeAdminPage = () => {
   const [pendingStudents, setPendingStudents] = useState([]);
   const [pendingAlumni, setPendingAlumni] = useState([]);
   const [activeTab, setActiveTab] = useState('students'); // 'students' | 'alumni' | 'events'
-  const [loading, setLoading] = useState(true);
 
   // New Event Form State
   const [eventTitle, setEventTitle] = useState('');
@@ -18,7 +17,6 @@ const CollegeAdminPage = () => {
   const [eventSuccess, setEventSuccess] = useState('');
 
   const loadData = async () => {
-    setLoading(true);
     try {
       const [dash, stuList, almList] = await Promise.all([
         apiService.getCollegeDashboard(),

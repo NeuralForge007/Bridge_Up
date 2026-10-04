@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "seed": "node seed.js && node seed_students.js",
+    "seed:students": "node seed_students.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

@@ -114,23 +114,96 @@ export const INITIAL_DEMO_USERS = [
 
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(() => {
-    const saved = localStorage.getItem('nextstep_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('nextstep_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      localStorage.removeItem('nextstep_user');
+      return null;
+    }
   });
 
+  const [authLoading, setAuthLoading] = useState(true);
   const [demoUsers, setDemoUsers] = useState(INITIAL_DEMO_USERS);
   const [theme, setTheme] = useState(() => localStorage.getItem('nextstep_theme') || 'dark');
 
-  // Load demo users from backend if available
+  // Verify stored session on mount
   useEffect(() => {
-    const fetchDemoList = async () => {
-      const users = await apiService.getDemoUsers();
-      if (users && users.length > 0) {
-        setDemoUsers(users);
+    const controller = new AbortController();
+    const token = localStorage.getItem('nextstep_token');
+    
+    if (token) {
+      apiService.getMe(controller.signal)
+        .then(verifiedUser => {
+          if (verifiedUser) {
+            setCurrentUser(prev => ({
+              ...prev,
+              ...verifiedUser,
+              name: verifiedUser.name || verifiedUser.display_name || prev?.name,
+              avatar: verifiedUser.avatar || verifiedUser.avatar_url || prev?.avatar || AVATAR_PRESETS[0]
+            }));
+          } else {
+            // Token expired or invalid
+            setCurrentUser(null);
+            localStorage.removeItem('nextstep_token');
+            localStorage.removeItem('nextstep_user');
+          }
+        })
+        .catch(() => {
+          // Keep offline cached user if network temporarily failed
+        })
+        .finally(() => {
+          setAuthLoading(false);
+        });
+    } else {
+      // If cached user exists without token, acquire valid demo token or clear broken session
+      const saved = localStorage.getItem('nextstep_user');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          apiService.demoLogin(parsed)
+            .then(res => {
+              if (res?.user) {
+                setCurrentUser(prev => ({
+                  ...prev,
+                  ...res.user,
+                  name: res.user.name || res.user.display_name || prev?.name,
+                  avatar: res.user.avatar || prev?.avatar || AVATAR_PRESETS[0]
+                }));
+              }
+            })
+            .catch(() => {
+              setCurrentUser(null);
+              localStorage.removeItem('nextstep_user');
+            })
+            .finally(() => {
+              setAuthLoading(false);
+            });
+          return () => controller.abort();
+        } catch (e) {
+          setCurrentUser(null);
+          localStorage.removeItem('nextstep_user');
+        }
       }
-    };
-    fetchDemoList();
+      setAuthLoading(false);
+    }
+
+    return () => controller.abort();
   }, []);
+
+  // Fetch backend demo users only when unauthenticated and in development mode
+  useEffect(() => {
+    const isDemoEnabled = import.meta.env.VITE_ENABLE_DEMO_LOGIN === 'true' || import.meta.env.DEV;
+    if (!currentUser && isDemoEnabled) {
+      const controller = new AbortController();
+      apiService.getDemoUsers(controller.signal).then(users => {
+        if (users && users.length > 0) {
+          setDemoUsers(users);
+        }
+      });
+      return () => controller.abort();
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     if (currentUser) {
@@ -179,18 +252,32 @@ export const AuthProvider = ({ children }) => {
         setCurrentUser(user);
         return { success: true, user };
       }
+      throw new Error('Invalid response from login server.');
     } catch (err) {
-      // Check local demo list fallback
-      const found = demoUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
-      if (found) {
-        setCurrentUser(found);
-        return { success: true, user: found };
+      // Allow demo user fallback ONLY if explicitly enabled in development
+      const isDemoEnabled = import.meta.env.VITE_ENABLE_DEMO_LOGIN === 'true' || import.meta.env.DEV;
+      if (isDemoEnabled) {
+        const found = demoUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+        if (found) {
+          console.warn('[AUTH] Dev demo fallback activated for:', email);
+          try {
+            const demoRes = await apiService.demoLogin(found);
+            if (demoRes?.user) {
+              setCurrentUser(demoRes.user);
+              return { success: true, user: demoRes.user };
+            }
+          } catch (e) {
+            console.warn('[AUTH] Demo login network fallback:', e.message);
+          }
+          setCurrentUser(found);
+          return { success: true, user: found };
+        }
       }
       throw err;
     }
   };
 
-  // Quick 1-Click Login for Demo Profiles
+  // Quick 1-Click Login for Demo Profiles (Explicit Dev/Demo feature)
   const quickLogin = async (demoUserOrId) => {
     let target = typeof demoUserOrId === 'string' 
       ? demoUsers.find(u => u.id === demoUserOrId || u.user_id === demoUserOrId || u.email === demoUserOrId)
@@ -201,7 +288,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const res = await apiService.login(target.email, 'password123');
+      const res = await apiService.demoLogin(target);
       if (res && res.user) {
         const user = {
           ...res.user,
@@ -213,7 +300,7 @@ export const AuthProvider = ({ children }) => {
         return;
       }
     } catch (e) {
-      console.warn('Backend login fallback used for demo:', e.message);
+      console.warn('Backend demo login fallback:', e.message);
     }
 
     setCurrentUser(target);
@@ -221,26 +308,44 @@ export const AuthProvider = ({ children }) => {
 
   // Standard Signup
   const signup = async (userData) => {
-    const fullName = (userData.name || `${userData.firstName || ''} ${userData.lastName || ''}`).trim() || 'New User';
+    const fullName = (userData.name || userData.full_name || `${userData.firstName || ''} ${userData.lastName || ''}`).trim() || 'New User';
+
+    const resolvedCollegeName =
+      userData.collegeName ||
+      userData.college_name ||
+      userData.collegeNetwork ||
+      '';
+
+    const resolvedCollegeId =
+      userData.collegeId ||
+      userData.college_id ||
+      null;
+
     const registerPayload = {
+      ...userData,
+      name: fullName,
+      full_name: fullName,
       email: userData.email,
       password: userData.password || 'password123',
-      name: fullName,
-      firstName: userData.firstName || fullName.split(' ')[0] || 'New',
-      lastName: userData.lastName || fullName.split(' ').slice(1).join(' ') || 'User',
       role: userData.role || 'STUDENT',
-      collegeId: userData.collegeId || 'col-1',
-      collegeName: userData.collegeName || 'Stanford University',
-      major: userData.major || 'Computer Science',
-      year: userData.year || 'Junior (Year 3)',
-      gpa: userData.gpa || '8.50',
-      avatarUrl: userData.avatar || AVATAR_PRESETS[0],
-      avatar: userData.avatar || AVATAR_PRESETS[0],
-      headline: userData.headline || userData.bio || 'Aspiring engineer & builder on BridgeUp',
-      skills: Array.isArray(userData.skills) ? userData.skills : (userData.skills ? userData.skills.split(',').map(s => s.trim()) : ['React', 'Python']),
-      company: userData.company || '',
-      roleTitle: userData.roleTitle || '',
-      companyName: userData.companyName || userData.company || ''
+      collegeNetwork: userData.collegeNetwork || resolvedCollegeName,
+      collegeId: resolvedCollegeId,
+      college_id: resolvedCollegeId,
+      collegeName: resolvedCollegeName,
+      college_name: resolvedCollegeName,
+      major: userData.department || userData.major || 'Computer Science and Engineering',
+      department: userData.department || userData.major || 'Computer Science and Engineering',
+      year: userData.year || `Year ${userData.year_of_study || userData.yearOfStudy || 1}`,
+      year_of_study: Number(userData.year_of_study || userData.yearOfStudy || 1),
+      yearOfStudy: Number(userData.year_of_study || userData.yearOfStudy || 1),
+      graduation_year: Number(userData.graduation_year || userData.graduationYear || 2028),
+      graduationYear: Number(userData.graduation_year || userData.graduationYear || 2028),
+      gpa: String(userData.cgpa || userData.gpa || '8.50'),
+      cgpa: Number(userData.cgpa || userData.gpa || 8.50),
+      avatarUrl: userData.avatar || userData.avatarUrl || AVATAR_PRESETS[0],
+      avatar: userData.avatar || userData.avatarUrl || AVATAR_PRESETS[0],
+      headline: userData.headline || userData.bio || (resolvedCollegeName ? `Student at ${resolvedCollegeName}` : 'Aspiring engineer & builder on BridgeUp'),
+      skills: Array.isArray(userData.skills) ? userData.skills : (userData.skills ? userData.skills.split(',').map(s => s.trim()) : ['Python', 'React'])
     };
 
     try {
@@ -248,12 +353,15 @@ export const AuthProvider = ({ children }) => {
       if (result && result.user) {
         const user = {
           ...result.user,
-          name: result.user.name || result.user.display_name || `${result.user.first_name || ''} ${result.user.last_name || ''}`.trim() || fullName,
+          name: result.user.name || result.user.display_name || result.user.full_name || fullName,
           avatar: result.user.avatar || result.user.avatar_url || registerPayload.avatarUrl,
           role: result.user.role || registerPayload.role,
+          college_id: result.user.college_id || registerPayload.collegeId,
+          college_name: result.user.college_name || registerPayload.collegeName,
+          collegeId: result.user.college_id || registerPayload.collegeId,
           collegeName: result.user.college_name || registerPayload.collegeName,
-          major: result.user.major || registerPayload.major,
-          gpa: result.user.gpa || registerPayload.gpa,
+          major: result.user.major || result.user.department || registerPayload.major,
+          gpa: result.user.gpa || String(registerPayload.cgpa),
           skills: result.user.skills || registerPayload.skills
         };
         setCurrentUser(user);
@@ -290,6 +398,7 @@ export const AuthProvider = ({ children }) => {
     <AuthContext.Provider value={{
       currentUser,
       isAuthenticated: !!currentUser,
+      authLoading,
       demoUsers,
       avatarPresets: AVATAR_PRESETS,
       login,
